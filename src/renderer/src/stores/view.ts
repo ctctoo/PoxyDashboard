@@ -1,0 +1,15 @@
+import { ref } from 'vue'
+import { openLogs } from './logs'
+
+export type ViewName = 'launchpad' | 'monitor' | 'logs' | 'settings'
+
+export const view = ref<ViewName>('launchpad')
+
+export function setView(v: ViewName): void {
+  view.value = v
+}
+
+export function openDashboardLogs(): void {
+  void openLogs('dashboard')
+  view.value = 'logs'
+}
