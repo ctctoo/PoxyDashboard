@@ -2,9 +2,40 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* ------------------------------------------------------------------ */
+/*  Design Tokens  —  "Control Desk" 精密控制台                         */
+/*  暖纸浅色 / 深墨暗色 · 信号橙「电源」主操作 · 翠绿「运行」状态        */
+/* ------------------------------------------------------------------ */
 @theme {
-  --font-sans: 'Inter', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Cascadia Code', Consolas, ui-monospace, 'SF Mono', monospace;
+  /* 字体 */
+  --font-sans: 'Inter', 'Segoe UI Variable', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Cascadia Code', 'Cascadia Mono', Consolas, 'SF Mono', ui-monospace, monospace;
+
+  /* 表面（浅色） */
+  --color-paper: #f3efe7;
+  --color-paper-raised: #faf7f1;
+  --color-line: #ddd6c7;
+  --color-ink: #1d201c;
+  --color-ink-soft: #6b6f66;
+
+  /* 表面（深色） */
+  --color-coal: #121411;
+  --color-coal-raised: #191c18;
+  --color-coal-line: #2a2e28;
+  --color-chalk: #e8e4d8;
+  --color-chalk-soft: #9aa093;
+
+  /* 信号色 */
+  --color-signal: #d94f2b; /* 电源 / 主操作 */
+  --color-signal-soft: #f2b9a6;
+  --color-go: #159269; /* 运行 */
+  --color-go-soft: #7fd0b1;
+  --color-warn: #c98a1b; /* 警告 */
+  --color-warn-soft: #e8c07a;
+  --color-alert: #cf3b2c; /* 危险 */
+  --color-alert-soft: #f0a99f;
+  --color-inspect: #3f6e8c; /* 观察 / 信息 */
+  --color-inspect-soft: #a7c2d3;
 }
 
 html,
@@ -17,6 +48,7 @@ body {
   overflow: hidden;
   user-select: none;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 input,
@@ -24,67 +56,115 @@ textarea {
   user-select: text;
 }
 
+/* ---------- 滚动条（细 · 信号橙） ---------- */
 .scroll-slim::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 .scroll-slim::-webkit-scrollbar-thumb {
-  background: rgb(163 163 163 / 0.45);
+  background: rgb(140 130 110 / 0.35);
   border-radius: 8px;
 }
+.scroll-slim::-webkit-scrollbar-thumb:hover {
+  background: rgb(217 79 43 / 0.55);
+}
 .dark .scroll-slim::-webkit-scrollbar-thumb {
-  background: rgb(64 64 64 / 0.8);
+  background: rgb(90 96 86 / 0.6);
+}
+.dark .scroll-slim::-webkit-scrollbar-thumb:hover {
+  background: rgb(217 79 43 / 0.7);
 }
 .scroll-slim::-webkit-scrollbar-track {
   background: transparent;
 }
 
+/* ---------- 暗色工作台微网格纹理 ---------- */
+.desk-grid {
+  background-image:
+    linear-gradient(rgb(255 255 255 / 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 0.025) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
 @layer components {
+  /* ----- 按钮 ----- */
   .btn {
-    @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-40;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-[7px] px-3 py-1.5 text-sm font-medium transition-all duration-150 disabled:pointer-events-none disabled:opacity-40;
   }
+  /* 主操作：信号橙「电源」 */
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-emerald-500 disabled:pointer-events-none disabled:opacity-40;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-[7px] bg-signal px-3 py-1.5 text-sm font-semibold text-white transition-all duration-150 hover:bg-[#c4421f] active:translate-y-px disabled:pointer-events-none disabled:opacity-40 disabled:hover:bg-signal;
+    box-shadow: 0 1px 0 rgb(0 0 0 / 0.25), inset 0 1px 0 rgb(255 255 255 / 0.18);
   }
   .btn-danger {
-    @apply inline-flex items-center justify-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-500 disabled:pointer-events-none disabled:opacity-40;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-[7px] bg-alert px-3 py-1.5 text-sm font-semibold text-white transition-all duration-150 hover:bg-[#b53224] active:translate-y-px disabled:pointer-events-none disabled:opacity-40 disabled:hover:bg-alert;
+    box-shadow: 0 1px 0 rgb(0 0 0 / 0.22), inset 0 1px 0 rgb(255 255 255 / 0.18);
   }
   .btn-ghost {
-    @apply inline-flex items-center justify-center gap-1.5 rounded-lg border border-neutral-200 bg-transparent px-3 py-1.5 text-sm font-medium text-neutral-600 transition-colors hover:bg-neutral-200/60 disabled:pointer-events-none disabled:opacity-40 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-700/60;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-[7px] border border-line bg-transparent px-3 py-1.5 text-sm font-medium text-ink-soft transition-colors duration-150 hover:border-signal/60 hover:text-ink disabled:pointer-events-none disabled:opacity-40 dark:border-coal-line dark:text-chalk-soft dark:hover:border-signal/60 dark:hover:text-chalk;
   }
   .btn-sm {
     @apply px-2 py-1 text-xs;
   }
+
+  /* ----- 面板 / 卡片：硬边 + 细发丝线 ----- */
   .card {
-    @apply rounded-xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900;
+    @apply rounded-lg border border-line bg-paper-raised dark:border-coal-line dark:bg-coal-raised;
+    box-shadow: 0 1px 0 rgb(0 0 0 / 0.03);
   }
+
+  /* ----- 输入 ----- */
   .input {
-    @apply w-full rounded-lg border border-neutral-300 bg-white px-2.5 py-1.5 text-sm outline-none transition-colors focus:border-emerald-500 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100;
+    @apply w-full rounded-[7px] border border-line bg-white px-2.5 py-1.5 font-sans text-sm text-ink outline-none transition-all duration-150 focus:border-signal focus:ring-2 focus:ring-signal/20 dark:border-coal-line dark:bg-black/25 dark:text-chalk;
   }
+
+  /* ----- 图标按钮 ----- */
   .icon-btn {
-    @apply inline-flex h-7 w-7 items-center justify-center rounded-md text-neutral-500 transition-colors hover:bg-neutral-200/70 hover:text-neutral-800 disabled:pointer-events-none disabled:opacity-30 dark:text-neutral-400 dark:hover:bg-neutral-700/70 dark:hover:text-neutral-100;
+    @apply inline-flex h-7 w-7 items-center justify-center rounded-md text-ink-soft transition-all duration-150 hover:bg-ink/5 hover:text-ink disabled:pointer-events-none disabled:opacity-30 dark:text-chalk-soft dark:hover:bg-white/10 dark:hover:text-chalk;
   }
   .icon-btn.active {
-    @apply bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300;
+    @apply bg-signal/10 text-signal dark:bg-signal/15 dark:text-signal-soft;
   }
+
+  /* ----- 微标签（状态 / 分类） ----- */
   .chip {
-    @apply inline-flex items-center gap-1 rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300;
+    @apply inline-flex items-center gap-1 rounded-[6px] border border-line bg-paper px-2 py-0.5 font-mono text-[11px] text-ink-soft dark:border-coal-line dark:bg-black/20 dark:text-chalk-soft;
   }
   .chip-port {
-    @apply inline-flex cursor-pointer items-center rounded-full bg-emerald-50 px-2 py-0.5 font-mono text-[11px] text-emerald-600 transition-colors hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-300;
+    @apply inline-flex cursor-pointer items-center rounded-[6px] border border-go/25 bg-go/8 px-2 py-0.5 font-mono text-[11px] font-semibold text-go transition-colors hover:border-go/50 hover:bg-go/15 dark:border-go/30 dark:bg-go/10 dark:text-go-soft;
   }
+
+  /* ----- 导航项（跟随主题） ----- */
   .nav-item {
-    @apply flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-neutral-600 transition-colors hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800;
+    @apply relative flex items-center gap-2.5 rounded-[7px] px-3 py-2 font-mono text-[13px] font-medium text-ink-soft transition-colors duration-150 hover:bg-ink/5 hover:text-ink dark:text-chalk-soft dark:hover:bg-white/5 dark:hover:text-chalk;
   }
   .nav-item.active {
-    @apply bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300;
+    @apply bg-signal/12 text-signal dark:text-signal-soft;
+  }
+  .nav-item.active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    height: 16px;
+    width: 2px;
+    border-radius: 2px;
+    background: var(--color-signal);
+    box-shadow: 0 0 8px 0 rgb(217 79 43 / 0.6);
+  }
+
+  /* ----- 面板小节标题（大写等宽微标签） ----- */
+  .panel-label {
+    @apply font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-soft dark:text-chalk-soft;
   }
 }
 
+/* ---------- 动画 ---------- */
 @keyframes pop-in {
   from {
     opacity: 0;
-    transform: scale(0.92) translateY(2px);
+    transform: scale(0.95) translateY(3px);
   }
   to {
     opacity: 1;
@@ -92,7 +172,22 @@ textarea {
   }
 }
 .pop-in {
-  animation: pop-in 0.18s ease-out;
+  animation: pop-in 0.16s ease-out;
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.82);
+  }
+}
+.pulse-dot {
+  animation: pulse-dot 1.6s ease-in-out infinite;
 }
 
 .row-move,

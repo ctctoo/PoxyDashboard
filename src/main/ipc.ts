@@ -11,7 +11,8 @@ import type {
   Settings,
   ValidationResult
 } from '../shared/types'
-import { killTree } from './commands'
+import { killTree, spawnCommandLine } from './commands'
+import { resolveAgentLaunch } from './agentLauncher'
 import type { ConfigStore } from './config'
 import { defaultRuntime } from './processManager'
 import type { ProcessManager } from './processManager'
@@ -276,10 +277,48 @@ export function registerIpc(deps: IpcDeps): void {
     logger.business(`取消隐藏端口 :${port}`)
     broadcast('apps:changed', cfg.data)
   })
+  const safeKill = async (pid: number, action: string): Promise<{ ok: boolean; reason?: string }> => {
+    if (!pid || pid <= 0) {
+      logger.business(`${action}：无效 pid=${pid}`)
+      return { ok: false, reason: 'invalid' }
+    }
+    try {
+      await killTree(pid)
+      logger.business(`${action}：pid=${pid}`)
+      return { ok: true }
+    } catch (err) {
+      logger.business(`${action}：pid=${pid} 失败 ${String(err)}`)
+      return { ok: false, reason: 'failed' }
+    }
+  }
+
   ipcMain.handle('monitor:kill', async (_e, pid: number) => {
-    logger.business(`强制结束进程 pid=${pid}`)
-    await killTree(pid)
+    await safeKill(pid, '强制结束进程')
   })
+
+  // ---- AI Agent 管理 ----
+  const launchAgent = (kind: string, action: string): { ok: boolean; reason?: string } => {
+    const cmd = resolveAgentLaunch(kind)
+    if (!cmd) {
+      logger.business(`无法自动${action} AI agent「${kind}」：未配置启动命令`)
+      return { ok: false, reason: 'unknown' }
+    }
+    try {
+      const child = spawnCommandLine(cmd, {})
+      child.unref?.()
+      child.on('error', () => undefined)
+      logger.business(`${action} AI agent「${kind}」：${cmd}`)
+      return { ok: true }
+    } catch {
+      logger.business(`${action} AI agent「${kind}」失败：${cmd}`)
+      return { ok: false, reason: 'failed' }
+    }
+  }
+
+  ipcMain.handle('agents:stopTask', (_e, pid: number) => safeKill(pid, '结束 AI agent 任务进程'))
+  ipcMain.handle('agents:stopAgent', (_e, pid: number) => safeKill(pid, '退出 AI agent 应用'))
+  ipcMain.handle('agents:startAgent', (_e, kind: string) => launchAgent(kind, '启动'))
+  ipcMain.handle('agents:restartAgent', (_e, kind: string) => launchAgent(kind, '重启'))
   ipcMain.handle('db:stop', async (_e, id: string) => {
     const row = await monitor.stopDb(id)
     logger.business(`停止数据库「${row?.label ?? id}」`)

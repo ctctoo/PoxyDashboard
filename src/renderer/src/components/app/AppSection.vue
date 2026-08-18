@@ -134,20 +134,27 @@ function sortedList(): AppEntry[] {
 
 <template>
   <section>
-    <div class="mb-2 flex items-center justify-between">
-      <div class="flex items-center gap-2">
-        <h2 class="text-sm font-bold">{{ kind === 'service' ? '服务' : '任务' }}</h2>
-        <span class="text-xs text-neutral-400">{{ sectionEntries.length }}</span>
-        <span v-if="sort.active" class="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
+    <div class="mb-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2">
+          <span class="flex items-center gap-2">
+            <span class="h-3.5 w-1 rounded-sm" :class="kind === 'service' ? 'bg-signal' : 'bg-inspect'" />
+            <h2 class="font-mono text-[13px] font-bold uppercase tracking-[0.1em]">{{ kind === 'service' ? '服务' : '任务' }}</h2>
+          </span>
+          <span class="rounded-[6px] border border-line bg-paper-raised px-1.5 font-mono text-[11px] text-ink-soft dark:border-coal-line dark:bg-coal-raised dark:text-chalk-soft">
+            {{ sectionEntries.length }}
+          </span>
+        </div>
+        <span v-if="sort.active" class="rounded-full border border-signal/40 bg-signal/10 px-2.5 py-0.5 font-mono text-[11px] text-signal dark:text-signal-soft">
           排序中：方向键移动 · 空格确认 · Esc 取消
         </span>
       </div>
-      <div class="flex items-center gap-1">
+      <div class="flex items-center gap-0.5">
         <button
           v-for="o in filterOptions"
           :key="o.v"
-          class="rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors"
-          :class="filter === o.v ? 'bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900' : 'text-neutral-500 hover:bg-neutral-200/70 dark:hover:bg-neutral-800'"
+          class="rounded-[6px] px-2.5 py-0.5 font-mono text-xs font-medium transition-colors"
+          :class="filter === o.v ? 'bg-ink text-paper dark:bg-chalk dark:text-coal' : 'text-ink-soft hover:bg-ink/5 dark:text-chalk-soft dark:hover:bg-white/10'"
           @click="filter = o.v"
         >
           {{ o.l }}
@@ -168,7 +175,7 @@ function sortedList(): AppEntry[] {
         <template #item="{ element, index }">
           <div
             tabindex="0"
-            class="rounded-xl outline-none focus-visible:outline-2 focus-visible:outline-emerald-400"
+            class="rounded-lg outline-none focus-visible:outline-2 focus-visible:outline-signal"
             @keydown="onItemKeydown($event, index)"
           >
             <AppCard :entry="element" :layout="props.view" @diagnose="(id: string) => emit('diagnose', id)" />
@@ -182,7 +189,7 @@ function sortedList(): AppEntry[] {
         v-for="(e, i) in sortedList()"
         :key="e.id"
         tabindex="0"
-        class="rounded-xl outline-2 outline-emerald-400"
+        class="rounded-lg outline-2 outline-signal"
         :class="i === sort.cursor ? 'outline' : 'opacity-70'"
         @keydown="onItemKeydown($event, i)"
       >
@@ -192,7 +199,7 @@ function sortedList(): AppEntry[] {
 
     <button
       v-if="!visible.length"
-      class="card flex w-full items-center justify-center gap-2 border-dashed py-8 text-sm text-neutral-400 transition-colors hover:text-emerald-500 hover:border-emerald-300 dark:hover:border-emerald-500/40"
+      class="card flex w-full items-center justify-center gap-2 border-dashed py-8 font-mono text-sm text-ink-soft transition-colors hover:border-signal/60 hover:text-signal dark:text-chalk-soft"
       @click="emit('add', kind)"
     >
       <Plus :size="16" />

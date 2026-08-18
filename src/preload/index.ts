@@ -47,6 +47,11 @@ const api: Api = {
   addFocusKeyword: (kw) => ipcRenderer.invoke('monitor:focusAdd', kw),
   removeFocusKeyword: (kw) => ipcRenderer.invoke('monitor:focusRemove', kw),
 
+  stopAgentTask: (pid) => ipcRenderer.invoke('agents:stopTask', pid),
+  stopAgent: (pid) => ipcRenderer.invoke('agents:stopAgent', pid),
+  startAgent: (kind) => ipcRenderer.invoke('agents:startAgent', kind),
+  restartAgent: (kind) => ipcRenderer.invoke('agents:restartAgent', kind),
+
   openUrl: (url) => ipcRenderer.invoke('shell:openUrl', url),
   openPath: (p) => ipcRenderer.invoke('shell:openPath', p),
   getAppInfo: () => ipcRenderer.invoke('app:info'),

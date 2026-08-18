@@ -10,6 +10,9 @@ import { buildOwnTree, classifyOrigin, scanPorts } from './portScanner'
 import type { ScanData } from './portScanner'
 import type { ConfigStore } from './config'
 import type { ProcessManager } from './processManager'
+import { aggregateAgents, mergeInstalledAgents } from './agentAggregator'
+import type { InstalledAgent } from './agentDetect'
+import { detectInstalledAgents } from './agentDetect'
 
 const SCAN_INTERVAL = 5000
 /** Docker 扫描间隔：每 3 个端口扫描周期执行一次（约 15s） */
@@ -59,6 +62,8 @@ export class MonitorService extends EventEmitter {
   /** 会话内容器表（含已停止的记录，支持重新启动） */
   private containerRows = new Map<string, ContainerRow>()
   private scanCount = 0
+  /** 已安装但未运行的 AI agent（启动时探测一次） */
+  private installedAgents: InstalledAgent[] = []
 
   constructor(
     private cfg: ConfigStore,
@@ -70,6 +75,16 @@ export class MonitorService extends EventEmitter {
   start(): void {
     void this.tick()
     this.timer = setInterval(() => void this.tick(), SCAN_INTERVAL)
+    void this.refreshInstalledAgents()
+  }
+
+  /** 重新探测已安装的 AI agent（不阻塞主流程） */
+  private async refreshInstalledAgents(): Promise<void> {
+    try {
+      this.installedAgents = await detectInstalledAgents()
+    } catch {
+      this.installedAgents = []
+    }
   }
 
   stop(): void {
@@ -310,7 +325,7 @@ export class MonitorService extends EventEmitter {
     const ownTree = buildOwnTree(data)
     const children = buildChildrenMap(data)
 
-    const snapshot = this.buildSnapshot(data, ownTree)
+    const snapshot = this.buildSnapshot(data, ownTree, children)
     this.lastSnapshot = snapshot
 
     const alerts: PortAlert[] = []
@@ -350,7 +365,7 @@ export class MonitorService extends EventEmitter {
     this.emit('snapshot', snapshot)
   }
 
-  private buildSnapshot(data: ScanData, ownTree: Set<number>): MonitorSnapshot {
+  private buildSnapshot(data: ScanData, ownTree: Set<number>, children: Map<number, number[]>): MonitorSnapshot {
     const now = Date.now()
     const cpuByPid = new Map<number, number>()
     for (const [pid, perf] of data.perf) {
@@ -428,12 +443,14 @@ export class MonitorService extends EventEmitter {
       for (const v of cpuByPid.values()) totalCpu += v
     }
     const dbs = this.syncDbRows(services, data)
+    const agents = mergeInstalledAgents(aggregateAgents(data, ownTree, cpuByPid, children), this.installedAgents)
     return {
       ts: data.ts,
       services,
       background: trimmedBackground,
       dbs,
       containers: this.getContainers(),
+      agents,
       stats: {
         serviceCount: services.length,
         backgroundCount: background.length,

@@ -124,8 +124,13 @@ export function toggleExpand(key: string): void {
   expandedCmd.value = s
 }
 
-export async function killProcess(pid: number): Promise<void> {
-  await api.killProcess(pid)
+export async function killProcess(pid: number): Promise<boolean> {
+  try {
+    await api.killProcess(pid)
+    return true
+  } catch {
+    return false
+  }
 }
 
 function applyDbRow(row: DbRow): void {

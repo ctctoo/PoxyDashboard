@@ -204,7 +204,7 @@ function showMainWindow(): void {
   mainWindow.focus()
 }
 
-function navigate(view: 'launchpad' | 'monitor' | 'logs' | 'settings'): void {
+function navigate(view: 'launchpad' | 'monitor' | 'agents' | 'logs' | 'settings'): void {
   showMainWindow()
   send('nav', view)
 }
@@ -219,6 +219,7 @@ function createTray(): void {
       { type: 'separator' },
       { label: '启动台', click: () => navigate('launchpad') },
       { label: '服务监控', click: () => navigate('monitor') },
+      { label: 'AI Agent', click: () => navigate('agents') },
       { label: '日志中心', click: () => navigate('logs') },
       { label: '设置', click: () => navigate('settings') },
       { type: 'separator' },

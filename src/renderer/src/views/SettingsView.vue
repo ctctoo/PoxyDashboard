@@ -13,15 +13,18 @@ const themeOptions = [
 <template>
   <div class="scroll-slim h-full max-w-2xl space-y-6 overflow-auto pb-4 pr-1">
     <section class="card p-5">
-      <h3 class="mb-4 font-semibold">通用</h3>
+      <div class="mb-4 flex items-center gap-2">
+        <span class="h-3.5 w-1 rounded-sm bg-signal" />
+        <h3 class="font-mono text-[13px] font-bold uppercase tracking-[0.1em]">通用</h3>
+      </div>
       <div class="flex items-center justify-between py-2.5">
         <div>
           <div class="text-sm font-medium">任务完成通知</div>
-          <div class="text-xs text-neutral-400">任务自然结束时发送系统通知，切走页面也能收到</div>
+          <div class="text-xs text-ink-soft dark:text-chalk-soft">任务自然结束时发送系统通知，切走页面也能收到</div>
         </div>
         <button
           class="relative h-6 w-11 rounded-full transition-colors"
-          :class="settings.notifyTaskComplete ? 'bg-emerald-500' : 'bg-neutral-300 dark:bg-neutral-700'"
+          :class="settings.notifyTaskComplete ? 'bg-go' : 'bg-ink/15 dark:bg-white/15'"
           @click="setNotify(!settings.notifyTaskComplete)"
         >
           <span
@@ -30,17 +33,17 @@ const themeOptions = [
           />
         </button>
       </div>
-      <div class="flex items-center justify-between border-t border-neutral-200 py-2.5 dark:border-neutral-800">
+      <div class="flex items-center justify-between border-t border-line py-2.5 dark:border-coal-line">
         <div>
           <div class="text-sm font-medium">外观</div>
-          <div class="text-xs text-neutral-400">自动跟随系统外观</div>
+          <div class="text-xs text-ink-soft dark:text-chalk-soft">自动跟随系统外观</div>
         </div>
-        <div class="flex rounded-lg border border-neutral-200 p-0.5 dark:border-neutral-700">
+        <div class="flex rounded-lg border border-line p-0.5 dark:border-coal-line">
           <button
             v-for="o in themeOptions"
             :key="o.v"
-            class="rounded-md px-3 py-1 text-sm transition-colors"
-            :class="settings.theme === o.v ? 'bg-emerald-500 text-white' : 'text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800'"
+            class="rounded-md px-3 py-1 font-mono text-sm transition-colors"
+            :class="settings.theme === o.v ? 'bg-ink text-paper dark:bg-chalk dark:text-coal' : 'text-ink-soft hover:bg-ink/5 dark:text-chalk-soft dark:hover:bg-white/10'"
             @click="setTheme(o.v)"
           >
             {{ o.l }}
@@ -50,18 +53,21 @@ const themeOptions = [
     </section>
 
     <section class="card p-5">
-      <h3 class="mb-4 font-semibold">关于</h3>
+      <div class="mb-4 flex items-center gap-2">
+        <span class="h-3.5 w-1 rounded-sm bg-inspect" />
+        <h3 class="font-mono text-[13px] font-bold uppercase tracking-[0.1em]">关于</h3>
+      </div>
       <dl class="space-y-2.5 text-sm">
         <div class="flex items-center justify-between">
-          <dt class="text-neutral-400">版本</dt>
-          <dd class="font-mono">v{{ appInfo?.version ?? '—' }}</dd>
+          <dt class="font-mono text-xs text-ink-soft dark:text-chalk-soft">版本</dt>
+          <dd class="font-mono tabular-nums">v{{ appInfo?.version ?? '—' }}</dd>
         </div>
         <div class="flex items-center justify-between">
-          <dt class="text-neutral-400">本地端口</dt>
-          <dd class="font-mono">{{ appInfo?.port ?? '—' }}</dd>
+          <dt class="font-mono text-xs text-ink-soft dark:text-chalk-soft">本地端口</dt>
+          <dd class="font-mono tabular-nums">{{ appInfo?.port ?? '—' }}</dd>
         </div>
         <div class="flex items-center justify-between gap-4">
-          <dt class="shrink-0 text-neutral-400">工作目录</dt>
+          <dt class="shrink-0 font-mono text-xs text-ink-soft dark:text-chalk-soft">工作目录</dt>
           <dd class="flex min-w-0 items-center gap-2">
             <span class="min-w-0 truncate font-mono text-xs" :title="appInfo?.cwd">{{ appInfo?.cwd }}</span>
             <button class="icon-btn !h-6 !w-6" title="打开工作目录" @click="appInfo && api.openPath(appInfo.cwd)">
@@ -70,7 +76,7 @@ const themeOptions = [
           </dd>
         </div>
         <div class="flex items-center justify-between gap-4">
-          <dt class="shrink-0 text-neutral-400">数据目录</dt>
+          <dt class="shrink-0 font-mono text-xs text-ink-soft dark:text-chalk-soft">数据目录</dt>
           <dd class="flex min-w-0 items-center gap-2">
             <span class="min-w-0 truncate font-mono text-xs" :title="appInfo?.dataDir">{{ appInfo?.dataDir }}</span>
             <button class="icon-btn !h-6 !w-6" title="打开数据目录" @click="appInfo && api.openPath(appInfo.dataDir)">
@@ -79,8 +85,8 @@ const themeOptions = [
           </dd>
         </div>
         <div class="flex items-center justify-between">
-          <dt class="text-neutral-400">运行环境</dt>
-          <dd class="font-mono text-xs">Electron {{ appInfo?.electron }} · Node {{ appInfo?.node }} · {{ appInfo?.platform }}</dd>
+          <dt class="font-mono text-xs text-ink-soft dark:text-chalk-soft">运行环境</dt>
+          <dd class="font-mono text-xs tabular-nums">Electron {{ appInfo?.electron }} · Node {{ appInfo?.node }} · {{ appInfo?.platform }}</dd>
         </div>
       </dl>
     </section>

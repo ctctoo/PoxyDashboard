@@ -35,27 +35,29 @@ onMounted(() => {
 
 <template>
   <div class="flex h-full min-h-0 gap-4">
-    <aside class="scroll-slim flex w-72 shrink-0 flex-col gap-1 overflow-auto pr-1">
+    <aside class="scroll-slim flex w-72 shrink-0 flex-col gap-0.5 overflow-auto pr-1">
+      <div class="mb-1 px-1 font-mono text-[10px] uppercase tracking-[0.2em] text-ink-soft/60 dark:text-chalk-soft/60">Applications</div>
       <button
         v-for="item in list"
         :key="item.id"
-        class="flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors"
+        class="relative flex items-center gap-2.5 rounded-[7px] border border-transparent px-3 py-2 text-left text-sm transition-colors"
         :class="
           activeId === item.id
-            ? 'border border-emerald-200 bg-emerald-50 dark:border-emerald-500/20 dark:bg-emerald-500/10'
-            : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
+            ? 'border-line bg-paper-raised dark:border-coal-line dark:bg-coal-raised'
+            : 'hover:bg-ink/[0.03] dark:hover:bg-white/[0.05]'
         "
         @click="openLogs(item.id)"
       >
+        <span v-if="activeId === item.id" class="absolute inset-y-0 left-0 w-[3px] rounded-sm bg-signal" />
         <span>{{ item.icon }}</span>
-        <span class="min-w-0 flex-1 truncate">{{ item.name }}</span>
-        <span class="text-[11px]" :class="statusColor(item.status as never)">{{ statusLabel(item.status as never, 'task') }}</span>
-        <span class="font-mono text-[10px] text-neutral-400">{{ formatClock(lastLine.get(item.id)?.t) }}</span>
+        <span class="min-w-0 flex-1 truncate font-medium">{{ item.name }}</span>
+        <span class="font-mono text-[11px]" :class="statusColor(item.status as never)">{{ statusLabel(item.status as never, 'task') }}</span>
+        <span class="font-mono text-[10px] text-ink-soft/60 dark:text-chalk-soft/60">{{ formatClock(lastLine.get(item.id)?.t) }}</span>
       </button>
     </aside>
     <div class="flex min-w-0 flex-1 flex-col">
       <LogDetail v-if="activeId" :app-id="activeId" />
-      <div v-else class="grid flex-1 place-items-center text-sm text-neutral-400">选择左侧应用查看日志</div>
+      <div v-else class="grid flex-1 place-items-center font-mono text-sm text-ink-soft/70 dark:text-chalk-soft/70">选择左侧应用查看日志</div>
     </div>
   </div>
 </template>

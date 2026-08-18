@@ -116,8 +116,33 @@ function toEpoch(v: string | null): number {
   return Number.isNaN(t) ? Date.now() : t
 }
 
-const AI_NAMES = new Set(['codex.exe', 'claude.exe', 'kimi.exe', 'chatgpt.exe', 'gemini.exe', 'windsurf.exe', 'cline.exe'])
-const AI_CMDS = ['codex', 'claude', 'kimi', 'chatgpt', 'gemini', 'windsurf', 'cline', 'copilot']
+const AI_NAMES = new Set([
+  'codex.exe',
+  'claude.exe',
+  'claude-code.exe',
+  'kimi.exe',
+  'chatgpt.exe',
+  'gemini.exe',
+  'windsurf.exe',
+  'cline.exe',
+  'opencode.exe'
+])
+/** CLI 命令名：仅当作为可执行名/命令首 token 出现时才判定为 AI，避免误匹配任意含该子串的进程 */
+const AI_CMDS = ['codex', 'claude', 'kimi', 'chatgpt', 'gemini', 'windsurf', 'cline', 'copilot', 'opencode']
+
+/** 已知的非 agent 应用（浏览器等）：即使命令行含 AI 关键词也绝不判为 ai */
+const NON_AGENT_NAMES = new Set([
+  'msedge.exe',
+  'chrome.exe',
+  'chromium.exe',
+  'brave.exe',
+  'opera.exe',
+  'firefox.exe',
+  'iexplore.exe',
+  '360se.exe',
+  '360chrome.exe',
+  'qqbrowser.exe'
+])
 const EDITOR_NAMES = new Set([
   'code.exe',
   'cursor.exe',
@@ -177,19 +202,38 @@ const SYSTEM_NAMES = new Set([
   'explorer.exe'
 ])
 
+/** 判断命令行中是否以命令名/首 token 形式出现某个 AI CLI（边界感知，避免子串误判） */
+function aiCommandIn(cmd: string): string | undefined {
+  // 取命令行中每个"可执行单元"（去引号），匹配首个 AI 命令名
+  const tokens = cmd.match(/(?:^|[\s\\/])([a-zA-Z0-9_.-]+)(?:\.exe)?(?:\s|$)/g) ?? []
+  for (const t of tokens) {
+    const clean = t.replace(/^[\s\\/]+|[\s.]*$/g, '').toLowerCase()
+    for (const k of AI_CMDS) {
+      if (clean === k) return k
+    }
+  }
+  return undefined
+}
+
 function friendlyLabel(name: string, cmd: string): string {
   const n = name.toLowerCase()
-  const c = cmd.toLowerCase()
-  if (AI_CMDS.some((k) => c.includes(k) && /(codex|claude|kimi|chatgpt|gemini|windsurf|cline)/.test(c))) {
-    if (c.includes('codex')) return 'Codex'
-    if (c.includes('claude')) return 'Claude'
-    if (c.includes('kimi')) return 'Kimi'
-    if (c.includes('chatgpt')) return 'ChatGPT'
-    if (c.includes('gemini')) return 'Gemini'
-    if (c.includes('windsurf')) return 'Windsurf'
-    return 'AI 助手'
+  const aiCmd = aiCommandIn(cmd)
+  if (AI_NAMES.has(n) || aiCmd) {
+    const key = (AI_NAMES.has(n) ? n.replace(/\.exe$/, '') : aiCmd) as string
+    const LABELS: Record<string, string> = {
+      codex: 'Codex',
+      claude: 'Claude',
+      'claude-code': 'Claude',
+      kimi: 'Kimi',
+      chatgpt: 'ChatGPT',
+      gemini: 'Gemini',
+      windsurf: 'Windsurf',
+      cline: 'Cline',
+      opencode: 'OpenCode',
+      copilot: 'Copilot'
+    }
+    return LABELS[key] ?? 'AI 助手'
   }
-  if (AI_NAMES.has(n)) return n.replace(/\.exe$/, '')
   if (n === 'code.exe') return 'VS Code'
   if (n === 'cursor.exe') return 'Cursor'
   if (n === 'vscodium.exe') return 'VSCodium'
@@ -224,9 +268,14 @@ export function classifyOrigin(
     const cmd = (p.cmd ?? '').toLowerCase()
     let kind: ProcessOriginKind | null = null
     if (
+      // 已知浏览器等非 agent 应用绝不判为 ai
+      NON_AGENT_NAMES.has(name)
+    ) {
+      kind = null
+    } else if (
       AI_NAMES.has(name) ||
-      /(^|[\\\s])(codex|claude|kimi|chatgpt|gemini|windsurf|cline)(\.exe)?$/i.test(name) ||
-      (AI_CMDS.some((k) => cmd.includes(k)) && /(codex|claude|kimi|chatgpt|gemini|windsurf|cline|copilot)/.test(cmd))
+      /(^|[\\\s])(codex|claude-code|claude|kimi|chatgpt|gemini|windsurf|cline|opencode)(\.exe)?$/i.test(name) ||
+      !!aiCommandIn(cmd)
     ) {
       kind = 'ai'
     } else if (EDITOR_NAMES.has(name)) {

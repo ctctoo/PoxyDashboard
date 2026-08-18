@@ -50,34 +50,34 @@ export function statusColor(status: AppStatus): string {
   switch (status) {
     case 'running':
     case 'success':
-      return 'text-emerald-500'
+      return 'text-go dark:text-go-soft'
     case 'starting':
     case 'stopping':
-      return 'text-amber-500'
+      return 'text-warn dark:text-warn-soft'
     case 'failed':
     case 'cancelled':
     case 'error':
-      return 'text-red-500'
+      return 'text-alert dark:text-alert-soft'
     case 'aborted':
-      return 'text-violet-500'
+      return 'text-inspect dark:text-inspect-soft'
     default:
-      return 'text-neutral-400'
+      return 'text-ink-soft/70 dark:text-chalk-soft/70'
   }
 }
 
 export function originBadge(kind?: ProcessOriginKind): { label: string; cls: string } {
   switch (kind) {
     case 'ai':
-      return { label: 'AI 助手', cls: 'bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-500/15 dark:text-fuchsia-300' }
+      return { label: 'AI 助手', cls: 'bg-[#e9d4f2] text-[#6b3f85] dark:bg-[#4a2b5e]/50 dark:text-[#d3b2e6]' }
     case 'editor':
-      return { label: '编辑器', cls: 'bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300' }
+      return { label: '编辑器', cls: 'bg-inspect-soft/25 text-inspect dark:bg-inspect/15 dark:text-inspect-soft' }
     case 'terminal':
-      return { label: '终端', cls: 'bg-neutral-100 text-neutral-600 dark:bg-neutral-500/15 dark:text-neutral-300' }
+      return { label: '终端', cls: 'bg-paper text-ink-soft dark:bg-black/30 dark:text-chalk-soft' }
     case 'system':
-      return { label: '系统', cls: 'bg-neutral-200 text-neutral-500 dark:bg-neutral-600/25 dark:text-neutral-400' }
+      return { label: '系统', cls: 'bg-ink/8 text-ink-soft dark:bg-white/10 dark:text-chalk-soft' }
     case 'this-app':
-      return { label: '总控台', cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300' }
+      return { label: '总控台', cls: 'bg-signal/12 text-signal dark:bg-signal/15 dark:text-signal-soft' }
     default:
-      return { label: '其他', cls: 'bg-stone-100 text-stone-600 dark:bg-stone-500/15 dark:text-stone-300' }
+      return { label: '其他', cls: 'bg-paper text-ink-soft dark:bg-black/30 dark:text-chalk-soft' }
   }
 }

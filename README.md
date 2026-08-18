@@ -37,6 +37,14 @@
 - 外观三态：自动 / 浅色 / 深色。
 - 关于：版本、本地端口、工作目录、数据目录、运行环境。
 
+### AI Agent 管理
+- 统一展示本机的 AI agent 工具（Codex / Cursor / Claude / Kimi / OpenCode / ChatGPT / Gemini / Windsurf / Cline 等），聚合为卡片视图。
+- **自动检测已安装的 agent**：即使未启动，也会通过 npm 全局 bin / PATH 探测本机已安装的 agent，展示为「未启动」状态，可一键启动。
+- 每个 agent 卡展示应用本体与资源占用（CPU / 内存 / 端口 / 运行时长），展开可查看其派生的任务进程（命令行推断）。
+- 进程控制：可安全结束单个任务进程（killTree 进程树）；可退出、重启或启动 agent 应用本体（内置启动命令表；未知 agent 明确提示手动打开）。
+- **精确识别**：AI 判定采用命令名边界匹配 + 浏览器黑名单，避免把 Edge/Chrome 等误判为 agent。
+- 集成命令面板：`打开 AI Agent` 可一键切换视图。
+
 ### 命令面板（⌘K）
 - 全局搜索并执行：添加服务/任务、启动/停止/重启任意应用、打开页面、查看日志、切换视图、开关任务通知、查看总控台日志，全键盘操作。
 
@@ -92,11 +100,14 @@ src/
 │   ├── index.ts     # 窗口 / 托盘 / 快捷键 / 本地只读 HTTP 服务
 │   ├── processManager.ts  # 启停、进程树安全停止、退出码语义
 │   ├── monitor.ts   # 端口扫描调度、新端口提醒、已认领进程状态
+│   ├── agentAggregator.ts # AI agent 进程树聚合（应用本体 + 派生任务）
+│   ├── agentLauncher.ts   # 常见 AI agent 的启动命令表
+│   ├── agentDetect.ts     # 已安装 agent 探测（npm 全局 bin / PATH）
 │   ├── portScanner.ts     # PowerShell 采集监听端口与进程信息、溯源分类
 │   ├── projectDetect.ts   # 项目类型识别 / 脚本命令生成
 │   ├── logger.ts    # 环形缓冲 + 滚动日志文件
 │   └── config.ts    # JSON 配置存储（原子写入）
 ├── preload/         # contextBridge 类型化 API
-├── renderer/        # Vue 3 界面：启动台 / 监控 / 日志 / 设置 / 命令面板
+├── renderer/        # Vue 3 界面：启动台 / 监控 / AI Agent / 日志 / 设置 / 命令面板
 └── shared/          # 主进程与渲染进程共享的类型定义
 ```

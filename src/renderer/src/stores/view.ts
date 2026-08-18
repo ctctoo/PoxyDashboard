@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { openLogs } from './logs'
 
-export type ViewName = 'launchpad' | 'monitor' | 'logs' | 'settings'
+export type ViewName = 'launchpad' | 'monitor' | 'agents' | 'logs' | 'settings'
 
 export const view = ref<ViewName>('launchpad')
 

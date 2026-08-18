@@ -61,6 +61,11 @@ export interface Api {
   addFocusKeyword(kw: string): Promise<void>
   removeFocusKeyword(kw: string): Promise<void>
 
+  stopAgentTask(pid: number): Promise<{ ok: boolean; reason?: string }>
+  stopAgent(pid: number): Promise<{ ok: boolean; reason?: string }>
+  startAgent(kind: string): Promise<{ ok: boolean; reason?: string }>
+  restartAgent(kind: string): Promise<{ ok: boolean; reason?: string }>
+
   openUrl(url: string): Promise<void>
   openPath(p: string): Promise<void>
   getAppInfo(): Promise<AppInfo>
@@ -78,7 +83,7 @@ export interface AppEvents {
   'logs:append': { appId: string; lines: LogLine[] }
   'settings:changed': Settings
   shortcut: 'palette' | 'logs'
-  nav: 'launchpad' | 'monitor' | 'logs' | 'settings'
+  nav: 'launchpad' | 'monitor' | 'agents' | 'logs' | 'settings'
 }
 
 export type AppEventChannel = keyof AppEvents

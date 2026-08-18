@@ -90,72 +90,72 @@ async function save(): Promise<void> {
       <div class="flex gap-2">
         <button
           class="btn-ghost flex-1"
-          :class="{ '!border-emerald-500 !text-emerald-600': form.kind === 'service' }"
+          :class="{ '!border-signal !text-signal dark:!border-signal dark:!text-signal-soft': form.kind === 'service' }"
           @click="form.kind = 'service'"
         >
-          🚀 服务 <span class="text-[11px] text-neutral-400">长期运行 · 端口语义</span>
+          🚀 服务 <span class="text-[11px] text-ink-soft dark:text-chalk-soft">长期运行 · 端口语义</span>
         </button>
         <button
           class="btn-ghost flex-1"
-          :class="{ '!border-emerald-500 !text-emerald-600': form.kind === 'task' }"
+          :class="{ '!border-signal !text-signal dark:!border-signal dark:!text-signal-soft': form.kind === 'task' }"
           @click="form.kind = 'task'"
         >
-          📋 任务 <span class="text-[11px] text-neutral-400">批处理 · 明确结束</span>
+          📋 任务 <span class="text-[11px] text-ink-soft dark:text-chalk-soft">批处理 · 明确结束</span>
         </button>
       </div>
 
       <div class="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
         <div>
-          <label class="mb-1 block text-xs text-neutral-400">名称</label>
+          <label class="mb-1 block font-mono text-[11px] uppercase tracking-wide text-ink-soft dark:text-chalk-soft">名称</label>
           <input v-model="form.name" class="input" placeholder="例如：前端开发服务器" />
         </div>
         <div class="pt-4">
-          <label class="mb-1 block text-xs text-neutral-400">图标</label>
+          <label class="mb-1 block font-mono text-[11px] uppercase tracking-wide text-ink-soft dark:text-chalk-soft">图标</label>
           <input v-model="form.icon" class="input w-16 text-center" placeholder="🚀" maxlength="4" />
         </div>
         <div>
-          <label class="mb-1 block text-xs text-neutral-400">端口（可选）</label>
-          <input v-model="form.port" class="input" type="number" min="1" max="65535" placeholder="服务可留空自动发现" :disabled="form.kind === 'task'" />
+          <label class="mb-1 block font-mono text-[11px] uppercase tracking-wide text-ink-soft dark:text-chalk-soft">端口（可选）</label>
+          <input v-model="form.port" class="input font-mono" type="number" min="1" max="65535" placeholder="服务可留空自动发现" :disabled="form.kind === 'task'" />
         </div>
       </div>
 
       <div>
-        <label class="mb-1 flex items-center justify-between text-xs text-neutral-400">
+        <label class="mb-1 flex items-center justify-between font-mono text-[11px] uppercase tracking-wide text-ink-soft dark:text-chalk-soft">
           <span>工作目录</span>
-          <button class="text-emerald-600 hover:underline" @click="pickDir"><FolderOpen :size="12" class="inline" /> 选择文件夹</button>
+          <button class="normal-case text-signal hover:underline dark:text-signal-soft" @click="pickDir"><FolderOpen :size="12" class="inline" /> 选择文件夹</button>
         </label>
         <input v-model="form.dir" class="input font-mono" placeholder="D:\Project\My\..." />
-        <div v-if="detection" class="mt-2 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-800/50">
-          <div class="flex items-center gap-1.5 text-xs text-neutral-500">
-            <Sparkles :size="13" class="text-emerald-500" />
+        <div v-if="detection" class="mt-2 rounded-lg border border-line bg-paper p-3 dark:border-coal-line dark:bg-black/25">
+          <div class="flex items-center gap-1.5 font-mono text-xs text-ink-soft dark:text-chalk-soft">
+            <Sparkles :size="13" class="text-signal" />
             自动识别：{{ detection.type }}
           </div>
           <div v-if="detection.candidates.length" class="mt-2 flex flex-wrap gap-1.5">
             <button
               v-for="(c, i) in detection.candidates"
               :key="i"
-              class="chip cursor-pointer border border-transparent hover:border-emerald-400"
+              class="chip cursor-pointer border border-transparent hover:border-signal/60 hover:text-signal dark:hover:text-signal-soft"
               @click="applyCandidate(i)"
             >
               {{ c.label }}{{ c.port ? ` · :${c.port}` : '' }}
             </button>
           </div>
-          <p v-else class="mt-1.5 text-xs text-amber-600">未识别到候选命令，请手动填写或选择脚本</p>
+          <p v-else class="mt-1.5 font-mono text-xs text-warn dark:text-warn-soft">未识别到候选命令，请手动填写或选择脚本</p>
         </div>
       </div>
 
       <div>
-        <label class="mb-1 flex items-center justify-between text-xs text-neutral-400">
+        <label class="mb-1 flex items-center justify-between font-mono text-[11px] uppercase tracking-wide text-ink-soft dark:text-chalk-soft">
           <span>启动命令</span>
-          <button class="text-emerald-600 hover:underline" @click="pickScript"><FileCode2 :size="12" class="inline" /> 选择脚本</button>
+          <button class="normal-case text-signal hover:underline dark:text-signal-soft" @click="pickScript"><FileCode2 :size="12" class="inline" /> 选择脚本</button>
         </label>
         <textarea v-model="form.command" class="input min-h-16 resize-y font-mono" placeholder="例如：pnpm run dev" />
-        <p v-if="form.scriptPath" class="mt-1 text-[11px] text-neutral-400">
+        <p v-if="form.scriptPath" class="mt-1 font-mono text-[11px] text-ink-soft dark:text-chalk-soft">
           脚本路径（仅保存路径，不复制内容）：<span class="font-mono">{{ form.scriptPath }}</span>
         </p>
       </div>
 
-      <ul v-if="issues.length" class="space-y-1 text-xs text-red-500">
+      <ul v-if="issues.length" class="space-y-1 font-mono text-xs text-alert">
         <li v-for="(iss, i) in issues" :key="i">· {{ iss }}</li>
       </ul>
 

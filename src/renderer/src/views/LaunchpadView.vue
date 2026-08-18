@@ -38,16 +38,20 @@ async function onStopAll(): Promise<void> {
 <template>
   <div class="scroll-slim h-full space-y-6 overflow-auto pb-4 pr-1">
     <header class="flex items-center justify-between">
-      <div class="text-sm text-neutral-500 dark:text-neutral-400">
-        共 {{ appEntries.length }} 个应用 ·
-        <span class="text-emerald-500">{{ runningCount }}</span>
-        个运行中
+      <div class="flex items-center gap-3 font-mono text-xs text-ink-soft dark:text-chalk-soft">
+        <span class="flex items-center gap-2 rounded-[6px] border border-line bg-paper-raised px-3 py-1.5 dark:border-coal-line dark:bg-coal-raised">
+          共 <b class="text-ink dark:text-chalk">{{ appEntries.length }}</b> 个应用
+        </span>
+        <span class="flex items-center gap-2 rounded-[6px] border border-go/30 bg-go/8 px-3 py-1.5 text-go dark:border-go/30 dark:bg-go/10 dark:text-go-soft">
+          <span class="h-1.5 w-1.5 rounded-full bg-go pulse-dot" />
+          <b>{{ runningCount }}</b> 运行中
+        </span>
       </div>
       <div class="flex items-center gap-2">
-        <div class="flex rounded-lg border border-neutral-200 p-0.5 dark:border-neutral-700">
+        <div class="flex rounded-lg border border-line p-0.5 dark:border-coal-line">
           <button
             class="icon-btn"
-            :class="{ '!border-emerald-500 !text-emerald-600': settings.launchpadView === 'grid' }"
+            :class="{ '!border-signal !text-signal dark:!text-signal-soft': settings.launchpadView === 'grid' }"
             title="宫格视图"
             @click="setLaunchpadView('grid')"
           >
@@ -55,7 +59,7 @@ async function onStopAll(): Promise<void> {
           </button>
           <button
             class="icon-btn"
-            :class="{ '!border-emerald-500 !text-emerald-600': settings.launchpadView === 'list' }"
+            :class="{ '!border-signal !text-signal dark:!text-signal-soft': settings.launchpadView === 'list' }"
             title="列表视图"
             @click="setLaunchpadView('list')"
           >
@@ -68,16 +72,16 @@ async function onStopAll(): Promise<void> {
           <button class="btn-ghost" @click="shortcutsOpen = !shortcutsOpen"><MoreHorizontal :size="14" /> 快捷操作</button>
           <div
             v-if="shortcutsOpen"
-            class="absolute right-0 top-full z-20 mt-1 w-64 rounded-lg border border-neutral-200 bg-white p-1 shadow-lg dark:border-neutral-700 dark:bg-neutral-900"
+            class="absolute right-0 top-full z-20 mt-1 w-64 rounded-lg border border-coal-line bg-coal-raised p-1 shadow-xl dark:border-coal-line dark:bg-coal-raised"
           >
             <button
-              class="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-red-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+              class="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-mono text-alert hover:bg-white/5 dark:text-alert-soft dark:hover:bg-white/5"
               @click="onStopAll"
             >
               ⏹ 停止全部运行中的应用
             </button>
             <button
-              class="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800"
+              class="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-white/5 dark:hover:bg-white/5"
               @click="shortcutsOpen = false; openDashboardLogs()"
             >
               🖥️ 查看总控台日志

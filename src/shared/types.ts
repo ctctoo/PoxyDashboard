@@ -208,6 +208,41 @@ export interface DbRow {
   lastActiveAt: number
 }
 
+/** Agent 派生的单个任务进程 */
+export interface AgentTaskProcess {
+  pid: number
+  name: string
+  cmdline: string
+  cpu: number
+  memMB: number
+  ports: number[]
+  createdAt: number
+}
+
+/** 一个 AI agent（应用本体 + 派生任务）聚合行 */
+export interface AgentRow {
+  /** 稳定标识（agent 根进程 pid，或 `${kind}:${firstPid}`） */
+  id: string
+  /** 'codex' | 'cursor' | 'claude' | 'kimi' | 'chatgpt' | 'gemini' | 'windsurf' | 'cline' | 'opencode' | 'ai' */
+  kind: string
+  label: string
+  icon: string
+  /** running=有任务进程或监听端口；idle=仅应用本体空闲；not-running=已安装但未启动 */
+  status: 'running' | 'idle' | 'not-running'
+  /** agent 应用根进程 pid（未启动时无） */
+  pid?: number
+  createdAt?: number
+  /** 整树 CPU 汇总（%） */
+  cpu: number
+  /** 整树内存汇总（MB） */
+  memMB: number
+  /** 整树监听端口 */
+  ports: number[]
+  /** 派生任务进程数 */
+  taskCount: number
+  tasks: AgentTaskProcess[]
+}
+
 export interface MonitorSnapshot {
   ts: number
   services: ProcessInfo[]
@@ -215,6 +250,7 @@ export interface MonitorSnapshot {
   dbs: DbRow[]
   containers: ContainerRow[]
   stats: MonitorStats
+  agents: AgentRow[]
 }
 
 export interface PortAlert {

@@ -15,13 +15,13 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 
 <template>
   <Teleport to="body">
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6 backdrop-blur-sm" @mousedown.self="emit('close')">
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-6 backdrop-blur-[2px]" @mousedown.self="emit('close')">
       <div
-        class="w-full rounded-xl border border-neutral-200 bg-white shadow-2xl dark:border-neutral-700 dark:bg-neutral-900"
+        class="w-full rounded-lg border border-line bg-paper-raised shadow-[0_24px_60px_-15px_rgb(0,0,0,0.35)] dark:border-coal-line dark:bg-coal-raised"
         :style="{ maxWidth: width ?? '560px' }"
       >
-        <header class="flex h-12 items-center justify-between border-b border-neutral-200 px-5 dark:border-neutral-800">
-          <h3 class="font-semibold">{{ title }}</h3>
+        <header class="flex h-12 items-center justify-between border-b border-line px-5 dark:border-coal-line">
+          <h3 class="font-mono text-[13px] font-bold uppercase tracking-[0.08em]">{{ title }}</h3>
           <button class="icon-btn" @click="emit('close')"><X :size="16" /></button>
         </header>
         <div class="scroll-slim max-h-[70vh] overflow-auto p-5">

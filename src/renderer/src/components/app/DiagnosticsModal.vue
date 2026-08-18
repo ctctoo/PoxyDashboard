@@ -23,7 +23,7 @@ function edit(): void {
 <template>
   <Modal v-if="app" :title="`启动诊断 · ${app.name}`" width="540px" @close="closeDiagnostics">
     <div v-if="result" class="space-y-2">
-      <div v-if="result.ok" class="flex items-center gap-2 text-sm text-emerald-600">
+      <div v-if="result.ok" class="flex items-center gap-2 font-mono text-sm font-medium text-go dark:text-go-soft">
         <CheckCircle2 :size="18" />
         配置有效，可以启动
       </div>
@@ -33,16 +33,16 @@ function edit(): void {
         class="rounded-lg border p-3 text-sm"
         :class="
           iss.level === 'error'
-            ? 'border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-500/10'
-            : 'border-amber-200 bg-amber-50 dark:border-amber-500/30 dark:bg-amber-500/10'
+            ? 'border-alert/40 bg-alert/8'
+            : 'border-warn/40 bg-warn/8'
         "
       >
         <div class="flex items-start gap-2">
-          <AlertTriangle v-if="iss.level === 'warning'" :size="15" class="mt-0.5 shrink-0 text-amber-500" />
-          <XCircle v-else :size="15" class="mt-0.5 shrink-0 text-red-500" />
+          <AlertTriangle v-if="iss.level === 'warning'" :size="15" class="mt-0.5 shrink-0 text-warn dark:text-warn-soft" />
+          <XCircle v-else :size="15" class="mt-0.5 shrink-0 text-alert dark:text-alert-soft" />
           <div>
-            <div :class="iss.level === 'error' ? 'text-red-600 dark:text-red-400' : 'text-amber-700 dark:text-amber-300'">{{ iss.message }}</div>
-            <div v-if="iss.fix" class="mt-1 text-xs text-neutral-500">修复建议：{{ iss.fix }}</div>
+            <div :class="iss.level === 'error' ? 'text-alert dark:text-alert-soft' : 'text-warn dark:text-warn-soft'">{{ iss.message }}</div>
+            <div v-if="iss.fix" class="mt-1 font-mono text-xs text-ink-soft dark:text-chalk-soft">修复建议：{{ iss.fix }}</div>
           </div>
         </div>
       </div>

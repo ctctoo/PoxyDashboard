@@ -60,6 +60,7 @@ function buildActions(): PaletteAction[] {
     { id: 'add-task', label: '添加任务', hint: '批处理 · 有结束时间', keywords: 'task 添加任务 新任务 脚本', icon: '📋', run: () => openAdd('task') },
     { id: 'view-launchpad', label: '打开启动台', hint: view.value === 'launchpad' ? '当前' : undefined, keywords: '启动台 launchpad 服务 任务', icon: '🚀', run: () => setView('launchpad') },
     { id: 'view-monitor', label: '打开服务监控', hint: view.value === 'monitor' ? '当前' : undefined, keywords: '监控 monitor 进程 端口', icon: '📡', run: () => setView('monitor') },
+    { id: 'view-agents', label: '打开 AI Agent', hint: view.value === 'agents' ? '当前' : undefined, keywords: 'ai agent agent 人工智能 助手', icon: '🤖', run: () => setView('agents') },
     { id: 'view-logs', label: '打开日志中心', hint: view.value === 'logs' ? '当前' : undefined, keywords: '日志 logs', icon: '📜', run: () => setView('logs') },
     { id: 'view-settings', label: '打开设置中心', hint: view.value === 'settings' ? '当前' : undefined, keywords: '设置 settings', icon: '⚙️', run: () => setView('settings') },
     { id: 'dashboard-logs', label: '查看总控台自身日志', keywords: '总控台 日志 dashboard 自身', icon: '🖥️', run: openDashboardLogs }

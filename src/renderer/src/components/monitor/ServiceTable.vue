@@ -56,12 +56,12 @@ function dbStatusLabel(s: DbRowStatus): string {
 function dbStatusColor(s: DbRowStatus): string {
   switch (s) {
     case 'running':
-      return 'text-emerald-500'
+      return 'text-go'
     case 'starting':
     case 'stopping':
-      return 'text-amber-500'
+      return 'text-warn'
     default:
-      return 'text-neutral-400'
+      return 'text-ink-soft/60 dark:text-chalk-soft/60'
   }
 }
 
@@ -79,11 +79,11 @@ function containerStatusLabel(s: ContainerState): string {
 }
 
 function containerStatusColor(s: ContainerState): string {
-  return s === 'running' ? 'text-emerald-500' : s === 'stopping' || s === 'starting' ? 'text-amber-500' : 'text-neutral-400'
+  return s === 'running' ? 'text-go' : s === 'stopping' || s === 'starting' ? 'text-warn' : 'text-ink-soft/60 dark:text-chalk-soft/60'
 }
 
 function containerDotClass(s: ContainerState): string {
-  return s === 'running' ? 'bg-emerald-500' : s === 'stopping' || s === 'starting' ? 'bg-amber-500' : 'bg-neutral-400'
+  return s === 'running' ? 'bg-go' : s === 'stopping' || s === 'starting' ? 'bg-warn' : 'bg-ink-soft/50 dark:bg-chalk-soft/50'
 }
 
 const claimingContainer = ref<string | null>(null)
@@ -117,12 +117,12 @@ async function onStartContainer(row: ContainerRow): Promise<void> {
 function dbDotClass(s: DbRowStatus): string {
   switch (s) {
     case 'running':
-      return 'bg-emerald-500'
+      return 'bg-go'
     case 'starting':
     case 'stopping':
-      return 'bg-amber-500'
+      return 'bg-warn'
     default:
-      return 'bg-neutral-400'
+      return 'bg-ink-soft/50 dark:bg-chalk-soft/50'
   }
 }
 
@@ -198,41 +198,44 @@ async function onClaim(p: ProcessInfo): Promise<void> {
 
 <template>
   <section class="card overflow-hidden">
-    <header class="flex items-center justify-between border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
-      <h3 class="text-sm font-semibold">服务表格</h3>
-      <span class="text-xs text-neutral-400">点击端口直接打开 · 共 {{ rows.length }} 个监听进程{{ dbs.length ? ` · ${dbs.length} 个数据库` : '' }}</span>
+    <header class="flex items-center justify-between border-b border-line px-4 py-3 dark:border-coal-line">
+      <div class="flex items-center gap-2">
+        <span class="h-3.5 w-1 rounded-sm bg-inspect" />
+        <h3 class="font-mono text-[13px] font-bold uppercase tracking-[0.1em]">服务表格</h3>
+      </div>
+      <span class="font-mono text-[11px] text-ink-soft dark:text-chalk-soft">点击端口直接打开 · 共 {{ rows.length }} 个监听进程{{ dbs.length ? ` · ${dbs.length} 个数据库` : '' }}</span>
     </header>
-    <div v-if="dbs.length" class="border-b border-neutral-200 dark:border-neutral-800">
-      <div class="flex items-center gap-1.5 px-4 pt-3 pb-1.5 text-[11px] font-medium text-neutral-400">
+    <div v-if="dbs.length" class="border-b border-line dark:border-coal-line">
+      <div class="flex items-center gap-1.5 px-4 pt-3 pb-1.5 panel-label">
         <Database :size="13" /> 数据库
       </div>
       <div
         v-for="row in dbs"
         :key="row.id"
-        class="flex items-center gap-3 border-b border-neutral-100 px-4 py-2.5 text-sm last:border-0 dark:border-neutral-800/60"
+        class="flex items-center gap-3 border-b border-line/60 px-4 py-2.5 text-sm last:border-0 dark:border-coal-line/60"
       >
         <span class="text-base leading-none">{{ row.icon }}</span>
         <div class="min-w-0 flex-1">
           <div class="truncate font-medium">
             {{ row.label }}
-            <span v-if="row.version" class="ml-1 text-[11px] text-neutral-400">{{ row.version }}</span>
+            <span v-if="row.version" class="ml-1 font-mono text-[11px] text-ink-soft dark:text-chalk-soft">{{ row.version }}</span>
           </div>
-          <div class="truncate text-[11px] text-neutral-400" :title="row.cmdline ?? row.service">
+          <div class="truncate font-mono text-[11px] text-ink-soft dark:text-chalk-soft" :title="row.cmdline ?? row.service">
             {{ row.service ? `Windows 服务 ${row.service}` : (row.cmdline ?? '—') }}
           </div>
         </div>
-        <span class="flex items-center gap-1.5 text-xs font-medium" :class="dbStatusColor(row.status)">
+        <span class="flex items-center gap-1.5 font-mono text-xs font-medium" :class="dbStatusColor(row.status)">
           <span class="h-1.5 w-1.5 rounded-full" :class="dbDotClass(row.status)" />
           {{ dbStatusLabel(row.status) }}
         </span>
         <span
           v-if="row.port"
-          class="rounded-full bg-neutral-100 px-2 py-0.5 font-mono text-[11px] text-neutral-500 dark:bg-neutral-800 dark:text-neutral-300"
+          class="rounded-[6px] border border-go/25 bg-go/8 px-2 py-0.5 font-mono text-[11px] font-semibold text-go dark:border-go/30 dark:bg-go/10 dark:text-go-soft"
           :title="`端口 ${row.port}`"
         >
           :{{ row.port }}
         </span>
-        <span v-else class="text-xs text-neutral-400">—</span>
+        <span v-else class="font-mono text-xs text-ink-soft/60 dark:text-chalk-soft/60">—</span>
         <div class="flex shrink-0 items-center gap-1">
           <button v-if="row.status === 'running'" class="btn-danger w-20" @click="onStopDb(row)">
             <Square :size="12" /> 停止
@@ -249,37 +252,37 @@ async function onClaim(p: ProcessInfo): Promise<void> {
         </div>
       </div>
     </div>
-    <div v-if="containers.length" class="border-b border-neutral-200 dark:border-neutral-800">
-      <div class="flex items-center gap-1.5 px-4 pt-3 pb-1.5 text-[11px] font-medium text-neutral-400">
+    <div v-if="containers.length" class="border-b border-line dark:border-coal-line">
+      <div class="flex items-center gap-1.5 px-4 pt-3 pb-1.5 panel-label">
         <Boxes :size="13" /> 容器
       </div>
       <div
         v-for="row in containers"
         :key="row.id"
-        class="flex items-center gap-3 border-b border-neutral-100 px-4 py-2.5 text-sm last:border-0 dark:border-neutral-800/60"
+        class="flex items-center gap-3 border-b border-line/60 px-4 py-2.5 text-sm last:border-0 dark:border-coal-line/60"
       >
         <span class="text-base leading-none">🐳</span>
         <div class="min-w-0 flex-1">
           <div class="truncate font-medium">
             {{ row.name }}
-            <span class="ml-1 text-[11px] text-neutral-400">{{ row.image }}</span>
+            <span class="ml-1 font-mono text-[11px] text-ink-soft dark:text-chalk-soft">{{ row.image }}</span>
           </div>
-          <div class="truncate text-[11px] text-neutral-400" :title="row.statusText ?? row.portMap">
+          <div class="truncate font-mono text-[11px] text-ink-soft dark:text-chalk-soft" :title="row.statusText ?? row.portMap">
             {{ row.statusText ?? '—' }}{{ row.portMap ? ` · ${row.portMap}` : '' }}
           </div>
         </div>
-        <span class="flex items-center gap-1.5 text-xs font-medium" :class="containerStatusColor(row.status)">
+        <span class="flex items-center gap-1.5 font-mono text-xs font-medium" :class="containerStatusColor(row.status)">
           <span class="h-1.5 w-1.5 rounded-full" :class="containerDotClass(row.status)" />
           {{ containerStatusLabel(row.status) }}
         </span>
         <span
           v-if="row.ports.length"
-          class="rounded-full bg-neutral-100 px-2 py-0.5 font-mono text-[11px] text-neutral-500 dark:bg-neutral-800 dark:text-neutral-300"
+          class="rounded-[6px] border border-go/25 bg-go/8 px-2 py-0.5 font-mono text-[11px] font-semibold text-go dark:border-go/30 dark:bg-go/10 dark:text-go-soft"
           :title="row.ports.map((p) => `:${p}`).join(' · ')"
         >
           {{ row.ports.map((p) => `:${p}`).join(' ') }}
         </span>
-        <span v-else class="text-xs text-neutral-400">—</span>
+        <span v-else class="font-mono text-xs text-ink-soft/60 dark:text-chalk-soft/60">—</span>
         <div class="flex shrink-0 items-center gap-1">
           <button
             v-if="claimingContainer === row.id"
@@ -301,7 +304,7 @@ async function onClaim(p: ProcessInfo): Promise<void> {
       </div>
     </div>
     <div class="scroll-slim overflow-auto">
-      <div class="grid min-w-[860px] grid-cols-[80px_150px_1fr_120px_80px_70px_auto] items-center gap-2 border-b border-neutral-200 px-4 py-2 text-[11px] font-medium text-neutral-400 dark:border-neutral-800">
+      <div class="grid min-w-[860px] grid-cols-[80px_150px_1fr_120px_80px_70px_220px] items-center gap-2 border-b border-line bg-paper px-4 py-2 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-soft dark:border-coal-line dark:bg-black/20 dark:text-chalk-soft">
         <span>端口</span>
         <span>进程</span>
         <span>目录</span>
@@ -314,23 +317,23 @@ async function onClaim(p: ProcessInfo): Promise<void> {
         <div
           v-for="p in rows"
           :key="p.pid"
-          class="grid min-w-[860px] grid-cols-[80px_150px_1fr_120px_80px_70px_auto] items-center gap-2 border-b border-neutral-200 px-4 py-2 text-sm last:border-0 hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-800/50"
+          class="grid min-w-[860px] grid-cols-[80px_150px_1fr_120px_80px_70px_220px] items-center gap-2 border-b border-line/70 px-4 py-2 text-sm last:border-0 hover:bg-ink/[0.02] dark:border-coal-line/70 dark:hover:bg-white/[0.03]"
         >
           <button class="chip-port w-fit" title="打开 http://localhost:{{ portMin(p) }}" @click="openPort(portMin(p))">
             :{{ portMin(p) }}
           </button>
           <div class="min-w-0">
             <div class="truncate font-medium">{{ p.name }}</div>
-            <div class="text-[11px] text-neutral-400">PID {{ p.pid }}</div>
+            <div class="font-mono text-[11px] text-ink-soft dark:text-chalk-soft">PID {{ p.pid }}</div>
           </div>
-          <span class="truncate font-mono text-xs text-neutral-500" :title="p.dir">{{ p.dir ?? '—' }}</span>
-          <div class="text-xs">
-            <div class="text-neutral-600 dark:text-neutral-300">{{ p.cpu }}%</div>
-            <div class="text-neutral-400">{{ formatMem(p.memMB) }}</div>
+          <span class="truncate font-mono text-xs text-ink-soft dark:text-chalk-soft" :title="p.dir">{{ p.dir ?? '—' }}</span>
+          <div class="font-mono text-xs">
+            <div class="text-ink dark:text-chalk tabular-nums">{{ p.cpu }}%</div>
+            <div class="text-ink-soft/70 dark:text-chalk-soft/70">{{ formatMem(p.memMB) }}</div>
           </div>
-          <span class="text-xs text-neutral-400">{{ formatDuration(Date.now() - p.createdAt) }}</span>
-          <span class="flex items-center gap-1 text-xs text-emerald-500">
-            <span class="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+          <span class="font-mono text-xs text-ink-soft dark:text-chalk-soft">{{ formatDuration(Date.now() - p.createdAt) }}</span>
+          <span class="flex items-center gap-1 font-mono text-xs font-medium text-go">
+            <span class="h-1.5 w-1.5 rounded-full bg-go pulse-dot" />
             监听中
           </span>
           <div class="flex items-center justify-end gap-0.5">
@@ -340,38 +343,38 @@ async function onClaim(p: ProcessInfo): Promise<void> {
             </button>
             <span
               v-else-if="justClaimedPids.has(p.pid)"
-              class="pop-in inline-flex items-center gap-1 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"
+              class="pop-in inline-flex items-center gap-1 rounded-[6px] border border-go/25 bg-go/10 px-1.5 py-0.5 font-mono text-[10px] font-medium text-go dark:text-go-soft"
             >
               <Check :size="11" /> 已认领
             </span>
             <button v-else-if="!p.claimedBy" class="icon-btn" title="加入启动台" @click="onClaim(p)"><PlusCircle :size="13" /></button>
             <span
               v-else
-              class="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300"
+              class="inline-flex items-center gap-1 rounded-[6px] border border-go/20 bg-go/8 px-1.5 py-0.5 font-mono text-[10px] text-go dark:text-go-soft"
             >
               <ShieldCheck :size="11" /> 已认领
             </span>
             <button class="icon-btn" :title="pinnedRows.has(key(p)) ? '取消置顶' : '置顶'" @click="togglePin(key(p))">
               <Pin v-if="!pinnedRows.has(key(p))" :size="13" />
-              <PinOff v-else :size="13" class="text-emerald-500" />
+              <PinOff v-else :size="13" class="text-go" />
             </button>
             <button class="icon-btn" title="隐藏" @click="onHide(p)"><EyeOff :size="13" /></button>
             <button class="icon-btn" :title="expandedCmd.has(key(p)) ? '收起命令' : '展开命令'" @click="toggleExpand(key(p))">
               <ChevronRight v-if="!expandedCmd.has(key(p))" :size="13" />
               <ChevronDown v-else :size="13" />
             </button>
-            <button class="icon-btn hover:!text-red-500" title="安全结束进程" @click="onKill(p)"><XCircle :size="13" /></button>
+            <button class="icon-btn hover:!text-alert" title="安全结束进程" @click="onKill(p)"><XCircle :size="13" /></button>
           </div>
         </div>
         <div
           v-for="p in rows.filter((r) => expandedCmd.has(key(r)))"
           :key="`cmd-${p.pid}`"
-          class="border-b border-neutral-200 bg-neutral-50 px-4 py-2 font-mono text-[11px] text-neutral-500 dark:border-neutral-800 dark:bg-neutral-800/40"
+          class="border-b border-line bg-paper px-4 py-2 font-mono text-[11px] text-ink-soft dark:border-coal-line dark:bg-black/25 dark:text-chalk-soft"
         >
           {{ p.cmdline }}
         </div>
       </TransitionGroup>
-      <p v-if="!rows.length && !dbs.length" class="px-4 py-10 text-center text-sm text-neutral-400">暂无监听端口进程</p>
+      <p v-if="!rows.length && !dbs.length" class="px-4 py-10 text-center font-mono text-sm text-ink-soft/70 dark:text-chalk-soft/70">暂无监听端口进程</p>
     </div>
   </section>
 </template>
