@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto'
 import { basename } from 'path'
 import type {
   AppConfig,
+  AppEntry,
   AppInfo,
   AppRuntime,
   HiddenPortEntry,
@@ -34,7 +35,7 @@ export function broadcast(channel: string, payload?: unknown): void {
   }
 }
 
-function toEntry(pm: ProcessManager, app: AppConfig) {
+function toEntry(pm: ProcessManager, app: AppConfig): AppEntry {
   return { ...app, runtime: pm.getRuntime(app.id) ?? defaultRuntime(app) }
 }
 
@@ -56,6 +57,8 @@ export function registerIpc(deps: IpcDeps): void {
   })
   monitor.on('snapshot', (s) => broadcast('monitor:snapshot', s))
   monitor.on('alerts', (a) => broadcast('monitor:alerts', a))
+  monitor.on('db:changed', (rows) => broadcast('db:changed', rows))
+  monitor.on('containers:changed', (rows) => broadcast('containers:changed', rows))
   monitor.on('claimed-expired', (id: string) => {
     cfg.updateApp(id, { claimed: undefined })
     broadcast('apps:changed', cfg.data)
@@ -64,6 +67,7 @@ export function registerIpc(deps: IpcDeps): void {
   ipcMain.handle('config:get', () => cfg.data)
   ipcMain.handle('settings:update', (_e, patch: Partial<Settings>) => {
     const s = cfg.updateSettings(patch)
+    logger.business(`更新设置：${Object.keys(patch).join(', ') || '空'}`)
     broadcast('settings:changed', s)
     return s
   })
@@ -82,6 +86,7 @@ export function registerIpc(deps: IpcDeps): void {
       createdAt: Date.now()
     }
     cfg.addApp(app)
+    logger.business(`新增应用「${app.name}」（${app.kind}${app.port ? ` :${app.port}` : ''}）`)
     broadcast('apps:changed', cfg.data)
     return app
   })
@@ -96,6 +101,7 @@ export function registerIpc(deps: IpcDeps): void {
     if (updated && updated.claimed && !pm.hasChild(id)) {
       pm.claimExternal(updated)
     }
+    logger.business(`更新应用「${updated?.name ?? app.name}」`)
     broadcast('apps:changed', cfg.data)
     return updated
   })
@@ -107,18 +113,24 @@ export function registerIpc(deps: IpcDeps): void {
     }
     cfg.removeApp(id)
     pm.forget(id)
+    logger.business(`删除应用「${app.name}」`)
     broadcast('apps:changed', cfg.data)
   })
   ipcMain.handle('apps:reorder', (_e, ids: string[]) => {
     cfg.reorderApps(ids)
+    logger.business(`调整应用排序（${ids.length} 项）`)
     broadcast('apps:changed', cfg.data)
   })
   ipcMain.handle('apps:setPinned', (_e, id: string, v: boolean) => {
+    const app = cfg.getApp(id)
     cfg.updateApp(id, { pinned: v })
+    logger.business(`${v ? '固定' : '取消固定'}「${app?.name ?? id}」`)
     broadcast('apps:changed', cfg.data)
   })
   ipcMain.handle('apps:setHidden', (_e, id: string, v: boolean) => {
+    const app = cfg.getApp(id)
     cfg.updateApp(id, { hidden: v })
+    logger.business(`${v ? '隐藏' : '取消隐藏'}「${app?.name ?? id}」`)
     broadcast('apps:changed', cfg.data)
   })
 
@@ -128,9 +140,12 @@ export function registerIpc(deps: IpcDeps): void {
     const v = validateAppConfig(app)
     if (!v.ok) {
       const runtime: AppRuntime = { status: 'error', error: v.issues.filter((i) => i.level === 'error').map((i) => i.message).join('；') }
+      logger.business(`启动「${app.name}」失败：${runtime.error}`)
       return runtime
     }
-    return pm.start(app)
+    const runtime = pm.start(app)
+    logger.business(`启动「${app.name}」：${runtime.status === 'error' ? `失败（${runtime.error}）` : `pid=${runtime.pid}`}`)
+    return runtime
   })
   ipcMain.handle('apps:stop', async (_e, id: string) => {
     const app = cfg.getApp(id)
@@ -140,6 +155,7 @@ export function registerIpc(deps: IpcDeps): void {
       cfg.updateApp(id, { claimed: undefined })
       broadcast('apps:changed', cfg.data)
     }
+    logger.business(`停止「${app.name}」：${runtime?.status}`)
     return runtime
   })
   ipcMain.handle('apps:restart', async (_e, id: string) => {
@@ -152,17 +168,24 @@ export function registerIpc(deps: IpcDeps): void {
     }
     const v = validateAppConfig(app)
     if (!v.ok) {
-      return { status: 'error', error: v.issues.filter((i) => i.level === 'error').map((i) => i.message).join('；') } as AppRuntime
+      const error = v.issues.filter((i) => i.level === 'error').map((i) => i.message).join('；')
+      logger.business(`重启「${app.name}」失败：${error}`)
+      return { status: 'error', error } as AppRuntime
     }
-    return pm.restart(app)
+    const runtime = await pm.restart(app)
+    logger.business(`重启「${app.name}」：${runtime.status === 'error' ? `失败（${runtime.error}）` : `pid=${runtime.pid}`}`)
+    return runtime
   })
   ipcMain.handle('apps:stopAll', async () => {
     await pm.stopAll()
+    logger.business('停止全部应用')
   })
   ipcMain.handle('apps:validate', (_e, id: string): ValidationResult => {
     const app = cfg.getApp(id)
     if (!app) return { ok: false, issues: [{ level: 'error', message: '应用不存在', fix: '刷新后重试' }] }
-    return validateAppConfig(app)
+    const r = validateAppConfig(app)
+    logger.business(`校验「${app.name}」：${r.ok ? '通过' : r.issues.map((i) => i.message).join('；')}`)
+    return r
   })
 
   ipcMain.handle('dialog:pickDirectory', async () => {
@@ -180,8 +203,16 @@ export function registerIpc(deps: IpcDeps): void {
     })
     return r.canceled || !r.filePaths.length ? null : r.filePaths[0]
   })
-  ipcMain.handle('project:detect', (_e, dir: string) => detectProject(dir))
-  ipcMain.handle('project:scriptCommand', (_e, p: string) => scriptCommand(p))
+  ipcMain.handle('project:detect', (_e, dir: string) => {
+    const r = detectProject(dir)
+    logger.business(`项目检测：${dir} → ${r.type}（${r.candidates.length} 个候选）`)
+    return r
+  })
+  ipcMain.handle('project:scriptCommand', (_e, p: string) => {
+    const r = scriptCommand(p)
+    logger.business(`脚本识别：${p} → ${r.type}`)
+    return r
+  })
 
   ipcMain.handle('logs:get', (_e, appId: string) => logger.getLines(appId))
   ipcMain.handle('monitor:state', () => monitor.getLastSnapshot())
@@ -214,15 +245,18 @@ export function registerIpc(deps: IpcDeps): void {
     }
     cfg.addApp(app)
     pm.claimExternal(app)
+    logger.business(`认领端口 :${port} → 应用「${app.name}」（pid=${info.pid}）`)
     broadcast('apps:changed', cfg.data)
     return app
   })
   ipcMain.handle('monitor:dismiss', (_e, port: number) => {
     monitor.dismiss(port)
+    logger.business(`忽略端口提醒 :${port}`)
   })
   ipcMain.handle('monitor:ignorePort', (_e, port: number) => {
     cfg.addIgnoredPort(port)
     monitor.ignore(port)
+    logger.business(`永久忽略端口 :${port}`)
   })
   ipcMain.handle('monitor:hidePort', (_e, port: number) => {
     const info = monitor.findPortProcess(port)
@@ -234,21 +268,50 @@ export function registerIpc(deps: IpcDeps): void {
     }
     cfg.hidePort(entry)
     monitor.hide(port)
+    logger.business(`隐藏端口 :${port}（${entry.name}）`)
     broadcast('apps:changed', cfg.data)
   })
   ipcMain.handle('monitor:unhidePort', (_e, port: number) => {
     cfg.unhidePort(port)
+    logger.business(`取消隐藏端口 :${port}`)
     broadcast('apps:changed', cfg.data)
   })
   ipcMain.handle('monitor:kill', async (_e, pid: number) => {
+    logger.business(`强制结束进程 pid=${pid}`)
     await killTree(pid)
+  })
+  ipcMain.handle('db:stop', async (_e, id: string) => {
+    const row = await monitor.stopDb(id)
+    logger.business(`停止数据库「${row?.label ?? id}」`)
+    return row
+  })
+  ipcMain.handle('db:start', async (_e, id: string) => {
+    const row = await monitor.startDb(id)
+    logger.business(`启动数据库「${row?.label ?? id}」`)
+    return row
+  })
+  ipcMain.handle('db:dismiss', (_e, id: string) => {
+    monitor.dismissDb(id)
+    logger.business(`移除数据库记录「${id}」`)
+  })
+  ipcMain.handle('container:stop', async (_e, id: string) => {
+    const row = await monitor.stopContainer(id)
+    logger.business(`停止容器「${row?.name ?? id}」`)
+    return row
+  })
+  ipcMain.handle('container:start', async (_e, id: string) => {
+    const row = await monitor.startContainer(id)
+    logger.business(`启动容器「${row?.name ?? id}」`)
+    return row
   })
   ipcMain.handle('monitor:focusAdd', (_e, kw: string) => {
     cfg.addFocusKeyword(kw)
+    logger.business(`添加关注关键词「${kw}」`)
     broadcast('apps:changed', cfg.data)
   })
   ipcMain.handle('monitor:focusRemove', (_e, kw: string) => {
     cfg.removeFocusKeyword(kw)
+    logger.business(`移除关注关键词「${kw}」`)
     broadcast('apps:changed', cfg.data)
   })
 

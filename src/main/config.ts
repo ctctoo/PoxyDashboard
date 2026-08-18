@@ -3,6 +3,7 @@ import { readFileSync } from 'fs'
 import { promises as fs, existsSync, mkdirSync } from 'fs'
 import { join } from 'path'
 import type { AppConfig, ConfigFile, HiddenPortEntry, Settings } from '../shared/types'
+import type { LoggerService } from './logger'
 
 export function getDataDir(): string {
   return join(app.getPath('userData'), 'data')
@@ -23,7 +24,7 @@ function defaults(): ConfigFile {
     focusKeywords: [],
     hiddenPorts: [],
     ignoredPorts: [],
-    settings: { notifyTaskComplete: true, theme: 'auto' }
+    settings: { notifyTaskComplete: true, theme: 'auto', launchpadView: 'grid' }
   }
 }
 
@@ -31,7 +32,7 @@ export class ConfigStore {
   private cfg: ConfigFile = defaults()
   private saveTimer: NodeJS.Timeout | null = null
 
-  constructor() {
+  constructor(private logger?: LoggerService) {
     mkdirSync(getLogsDir(), { recursive: true })
     this.load()
   }
@@ -49,9 +50,11 @@ export class ConfigStore {
           hiddenPorts: Array.isArray(raw.hiddenPorts) ? raw.hiddenPorts : [],
           ignoredPorts: Array.isArray(raw.ignoredPorts) ? raw.ignoredPorts : []
         }
+        this.logger?.business(`加载配置成功（${this.cfg.apps.length} 个应用）`)
       }
     } catch {
       this.cfg = defaults()
+      this.logger?.business('配置加载失败，已回退到默认配置')
     }
   }
 
@@ -72,6 +75,7 @@ export class ConfigStore {
           await fs.writeFile(tmp, JSON.stringify(this.cfg, null, 2), 'utf8')
           await fs.rename(tmp, getConfigPath())
         } catch (err) {
+          this.logger?.business(`配置保存失败：${(err as Error).message}`)
           console.error('配置保存失败', err)
         }
       })()

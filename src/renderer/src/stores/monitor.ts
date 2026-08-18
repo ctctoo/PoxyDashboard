@@ -1,9 +1,11 @@
 import { computed, ref } from 'vue'
 import { api } from '../lib/api'
-import type { HiddenPortEntry, MonitorSnapshot, PortAlert, ProcessInfo } from '@shared/types'
+import type { ContainerRow, DbRow, HiddenPortEntry, MonitorSnapshot, PortAlert, ProcessInfo } from '@shared/types'
 
 export const snapshot = ref<MonitorSnapshot | null>(null)
 export const alerts = ref<PortAlert[]>([])
+export const dbs = ref<DbRow[]>([])
+export const containers = ref<ContainerRow[]>([])
 export const hiddenPorts = ref<HiddenPortEntry[]>([])
 export const focusKeywords = ref<string[]>([])
 export const focusQuery = ref('')
@@ -19,6 +21,8 @@ export async function initMonitor(): Promise<void> {
   unsubs = [
     api.on('monitor:snapshot', (s) => {
       snapshot.value = s
+      dbs.value = s.dbs ?? []
+      if (s.containers) containers.value = s.containers
       cpuHistory.value = [...cpuHistory.value.slice(-23), s.stats.totalCpu]
       memHistory.value = [...memHistory.value.slice(-23), s.stats.totalMemMB]
     }),
@@ -26,12 +30,22 @@ export async function initMonitor(): Promise<void> {
       const existing = new Set(alerts.value.map((a) => a.port))
       alerts.value = [...alerts.value, ...list.filter((a) => !existing.has(a.port))]
     }),
+    api.on('db:changed', (rows) => {
+      dbs.value = rows
+    }),
+    api.on('containers:changed', (rows) => {
+      containers.value = rows
+    }),
     api.on('apps:changed', () => {
       void refreshMeta()
     })
   ]
   const [s, h] = await Promise.all([api.getMonitorState(), api.getHiddenPorts()])
-  if (s) snapshot.value = s
+  if (s) {
+    snapshot.value = s
+    dbs.value = s.dbs ?? []
+    if (s.containers) containers.value = s.containers
+  }
   hiddenPorts.value = h
   const cfg = await api.getConfig()
   focusKeywords.value = cfg.focusKeywords
@@ -112,4 +126,41 @@ export function toggleExpand(key: string): void {
 
 export async function killProcess(pid: number): Promise<void> {
   await api.killProcess(pid)
+}
+
+function applyDbRow(row: DbRow): void {
+  const i = dbs.value.findIndex((r) => r.id === row.id)
+  if (i >= 0) dbs.value[i] = row
+  else dbs.value.push(row)
+}
+
+export async function stopDb(id: string): Promise<void> {
+  const row = await api.stopDb(id)
+  if (row) applyDbRow(row)
+}
+
+export async function startDb(id: string): Promise<void> {
+  const row = await api.startDb(id)
+  if (row) applyDbRow(row)
+}
+
+export async function dismissDb(id: string): Promise<void> {
+  await api.dismissDb(id)
+  dbs.value = dbs.value.filter((r) => r.id !== id)
+}
+
+function applyContainerRow(row: ContainerRow): void {
+  const i = containers.value.findIndex((r) => r.id === row.id)
+  if (i >= 0) containers.value[i] = row
+  else containers.value.push(row)
+}
+
+export async function stopContainer(id: string): Promise<void> {
+  const row = await api.stopContainer(id)
+  if (row) applyContainerRow(row)
+}
+
+export async function startContainer(id: string): Promise<void> {
+  const row = await api.startContainer(id)
+  if (row) applyContainerRow(row)
 }

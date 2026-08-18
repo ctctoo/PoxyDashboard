@@ -42,6 +42,35 @@ describe('detectProject', () => {
     expect(r.candidates[0]?.command).toBe('pnpm run dev')
   })
 
+  it('识别 npm 项目并给出 dev 候选及 vite 端口', () => {
+    const dir = makeProject({
+      'package.json': JSON.stringify({ scripts: { dev: 'vite' } }),
+      'package-lock.json': ''
+    })
+    const r = detectProject(dir)
+    expect(r.type).toBe('Node (npm)')
+    expect(r.candidates[0]?.command).toBe('npm run dev')
+    expect(r.candidates[0]?.port).toBe(5173)
+  })
+
+  it('识别 npm-shrinkwrap 项目并推断 next 端口', () => {
+    const dir = makeProject({
+      'package.json': JSON.stringify({ scripts: { start: 'next start' } }),
+      'npm-shrinkwrap.json': ''
+    })
+    const r = detectProject(dir)
+    expect(r.type).toBe('Node (npm)')
+    expect(r.candidates.some((c) => c.command === 'npm run start' && c.port === 3000)).toBe(true)
+  })
+
+  it('nest 项目端口推断为 3000', () => {
+    const dir = makeProject({
+      'package.json': JSON.stringify({ scripts: { start: 'nest start' } })
+    })
+    const r = detectProject(dir)
+    expect(r.candidates.some((c) => c.command === 'npm run start' && c.port === 3000)).toBe(true)
+  })
+
   it('识别 Hugo 站点', () => {
     const dir = makeProject({ 'hugo.toml': 'baseURL = "https://example.org"' })
     const r = detectProject(dir)
@@ -79,6 +108,41 @@ describe('detectProject', () => {
     const dir = makeProject({ 'mongod.cfg': 'storage:\n  dbPath: data/db' })
     const r = detectProject(dir)
     expect(r.candidates.some((c) => c.command.startsWith('mongod --config'))).toBe(true)
+  })
+
+  it('识别 Spring Boot Maven 项目并匹配 mvn 命令', () => {
+    const dir = makeProject({
+      'pom.xml':
+        '<project><parent><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-parent</artifactId></parent></project>'
+    })
+    const r = detectProject(dir)
+    expect(r.type).toBe('Java (Spring Boot)')
+    expect(r.candidates[0]?.command).toBe('mvn spring-boot:run')
+    expect(r.candidates[0]?.port).toBe(8080)
+  })
+
+  it('存在 mvnw wrapper 时优先使用 wrapper 命令', () => {
+    const dir = makeProject({
+      'pom.xml': '<project><groupId>org.springframework.boot</groupId></project>',
+      'mvnw.cmd': ''
+    })
+    const r = detectProject(dir)
+    expect(r.candidates[0]?.command).toContain('mvnw.cmd')
+  })
+
+  it('识别 Spring Boot Gradle 项目并匹配 bootRun 命令', () => {
+    const dir = makeProject({
+      'build.gradle': "plugins { id 'org.springframework.boot' version '3.2.0' }",
+      'gradlew.bat': ''
+    })
+    const r = detectProject(dir)
+    expect(r.candidates[0]?.command).toBe('.\\gradlew.bat bootRun')
+  })
+
+  it('普通 Maven 项目给出编译候选', () => {
+    const dir = makeProject({ 'pom.xml': '<project></project>' })
+    const r = detectProject(dir)
+    expect(r.candidates.some((c) => c.command === 'mvn compile')).toBe(true)
   })
 
   it('无效目录返回错误', () => {

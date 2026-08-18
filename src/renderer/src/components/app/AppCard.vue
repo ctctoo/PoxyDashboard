@@ -20,8 +20,10 @@ import { confirmDialog } from '../../stores/confirm'
 import { openLogs } from '../../stores/logs'
 import { openEdit } from '../../stores/ui'
 
-const props = defineProps<{ entry: AppEntry }>()
+const props = defineProps<{ entry: AppEntry; layout?: 'grid' | 'list' }>()
 const emit = defineEmits<{ diagnose: [id: string] }>()
+
+const isList = computed(() => props.layout === 'list')
 
 const running = computed(() => ['starting', 'running', 'stopping'].includes(props.entry.runtime.status))
 const portUrl = computed(() => (props.entry.runtime.port ? `http://localhost:${props.entry.runtime.port}` : null))
@@ -68,14 +70,17 @@ async function onCopy(): Promise<void> {
 </script>
 
 <template>
-  <article class="card group relative flex gap-2 p-4">
-    <div class="drag-handle mt-1 cursor-grab opacity-0 transition-opacity group-hover:opacity-100" title="拖拽排序">
+  <article
+    class="card group relative flex gap-2 p-3 sm:p-4"
+    :class="isList ? 'h-full min-h-[52px] flex-row items-center' : 'h-full min-h-[117px] flex-col sm:flex-row'"
+  >
+    <div class="drag-handle cursor-grab opacity-0 transition-opacity group-hover:opacity-100" title="拖拽排序" :class="isList ? 'shrink-0' : 'mt-1'">
       <GripVertical :size="15" class="text-neutral-400" />
     </div>
     <div class="min-w-0 flex-1">
       <div class="flex items-center gap-2">
         <span class="text-lg leading-none">{{ entry.icon ?? (entry.kind === 'service' ? '🚀' : '📋') }}</span>
-        <span class="truncate font-semibold">{{ entry.name }}</span>
+        <span class="min-w-0 flex-1 truncate font-semibold">{{ entry.name }}</span>
         <span class="text-xs font-medium" :class="statusColor(entry.runtime.status)">
           {{ statusLabel(entry.runtime.status, entry.kind) }}
         </span>
@@ -102,8 +107,8 @@ async function onCopy(): Promise<void> {
         <button class="shrink-0 underline underline-offset-2" @click="emit('diagnose', entry.id)">启动诊断</button>
       </div>
     </div>
-    <div class="flex shrink-0 flex-col items-end gap-2">
-      <button class="btn-primary w-24" :class="{ 'btn-danger': running }" :disabled="busy || (blocked && !running)" @click="onPrimary">
+    <div class="flex shrink-0 items-end gap-2" :class="isList ? 'flex-row items-center' : 'flex-col'">
+      <button class="btn-primary" :class="{ 'btn-danger': running, 'w-24': !isList }" :disabled="busy || (blocked && !running)" @click="onPrimary">
         <Play v-if="!running" :size="14" />
         <Square v-else :size="12" />
         {{ primaryLabel }}

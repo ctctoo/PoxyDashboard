@@ -2,7 +2,7 @@ import { reactive, ref } from 'vue'
 import { api } from '../lib/api'
 import type { AppInfo, Settings } from '@shared/types'
 
-export const settings = reactive<Settings>({ notifyTaskComplete: true, theme: 'auto' })
+export const settings = reactive<Settings>({ notifyTaskComplete: true, theme: 'auto', launchpadView: 'grid' })
 export const appInfo = ref<AppInfo | null>(null)
 
 export async function initSettings(): Promise<void> {
@@ -33,6 +33,11 @@ export function setTheme(t: Settings['theme']): void {
 export function setNotify(v: boolean): void {
   settings.notifyTaskComplete = v
   void api.updateSettings({ notifyTaskComplete: v })
+}
+
+export function setLaunchpadView(v: Settings['launchpadView']): void {
+  settings.launchpadView = v
+  void api.updateSettings({ launchpadView: v })
 }
 
 export function cycleTheme(): void {

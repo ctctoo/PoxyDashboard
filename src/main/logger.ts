@@ -58,6 +58,11 @@ export class LoggerService extends EventEmitter {
     return s
   }
 
+  /** 记录总控台自身业务日志，写入 dashboard.log 并广播到日志中心 */
+  business(text: string): void {
+    this.append('dashboard', 'sys', text)
+  }
+
   append(appId: string, stream: LogLine['stream'], text: string): void {
     const textLines = text.split(/\r?\n/)
     const lines: LogLine[] = []

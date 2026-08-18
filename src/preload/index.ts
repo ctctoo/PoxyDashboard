@@ -30,6 +30,13 @@ const api: Api = {
   getMonitorState: () => ipcRenderer.invoke('monitor:state'),
   getHiddenPorts: () => ipcRenderer.invoke('monitor:hiddenPorts'),
 
+  stopDb: (id) => ipcRenderer.invoke('db:stop', id),
+  startDb: (id) => ipcRenderer.invoke('db:start', id),
+  dismissDb: (id) => ipcRenderer.invoke('db:dismiss', id),
+
+  stopContainer: (id) => ipcRenderer.invoke('container:stop', id),
+  startContainer: (id) => ipcRenderer.invoke('container:start', id),
+
   claimPort: (port) => ipcRenderer.invoke('monitor:claim', port),
   dismissPort: (port) => ipcRenderer.invoke('monitor:dismiss', port),
   ignorePort: (port) => ipcRenderer.invoke('monitor:ignorePort', port),

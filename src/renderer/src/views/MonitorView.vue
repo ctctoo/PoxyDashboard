@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { snapshot, alerts, hiddenPorts, cpuHistory, memHistory, pendingAlertCount } from '../stores/monitor'
+import { snapshot, alerts, containers, dbs, hiddenPorts, cpuHistory, memHistory, pendingAlertCount } from '../stores/monitor'
 import OverviewCards from '../components/monitor/OverviewCards.vue'
 import PortAlerts from '../components/monitor/PortAlerts.vue'
 import ServiceTable from '../components/monitor/ServiceTable.vue'
@@ -12,7 +12,7 @@ import HiddenPanel from '../components/monitor/HiddenPanel.vue'
   <div class="scroll-slim h-full space-y-4 overflow-auto pb-4 pr-1">
     <OverviewCards :snapshot="snapshot" :cpu="cpuHistory" :mem="memHistory" :alert-count="pendingAlertCount" />
     <PortAlerts :alerts="alerts" />
-    <ServiceTable :services="snapshot?.services ?? []" />
+    <ServiceTable :services="snapshot?.services ?? []" :dbs="dbs" :containers="containers" />
     <FocusPanel />
     <HiddenPanel :entries="hiddenPorts" />
     <BackgroundPanel :processes="snapshot?.background ?? []" />

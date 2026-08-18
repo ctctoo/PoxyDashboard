@@ -58,6 +58,8 @@ export interface NewAppInput {
 export interface Settings {
   notifyTaskComplete: boolean
   theme: 'auto' | 'light' | 'dark'
+  /** 启动台布局：宫格 / 列表 */
+  launchpadView: 'grid' | 'list'
 }
 
 export interface HiddenPortEntry {
@@ -107,6 +109,38 @@ export interface ProcessOrigin {
   label: string
 }
 
+/** 常见数据库引擎 */
+export type DbKind =
+  | 'mysql'
+  | 'postgres'
+  | 'sqlserver'
+  | 'oracle'
+  | 'redis'
+  | 'mongodb'
+  | 'sqlite'
+  | 'mariadb'
+  | 'clickhouse'
+  | 'elasticsearch'
+  | 'kafka'
+  | 'memcached'
+  | 'neo4j'
+  | 'cassandra'
+  | 'influxdb'
+
+/** 扫描识别出的数据库实例（含默认控制命令） */
+export interface DbInfo {
+  kind: DbKind
+  label: string
+  icon: string
+  version?: string
+  /** Windows 服务名（识别到时通过 sc 控制） */
+  service?: string
+  /** 启动命令（来自服务注册表 / 可执行文件路径） */
+  start?: string
+  /** 停止命令（来自服务注册表 / 已知二进制） */
+  stop?: string
+}
+
 export interface ProcessInfo {
   pid: number
   ppid: number
@@ -120,6 +154,8 @@ export interface ProcessInfo {
   ports: number[]
   origin?: ProcessOrigin
   claimedBy?: string
+  /** 数据库实例信息（识别为常见数据库时存在） */
+  db?: DbInfo
 }
 
 export interface MonitorStats {
@@ -131,10 +167,53 @@ export interface MonitorStats {
   cores: number
 }
 
+export type DbRowStatus = 'running' | 'starting' | 'stopping' | 'stopped'
+
+/** Docker 容器运行状态（简化） */
+export type ContainerState = 'running' | 'starting' | 'stopping' | 'stopped'
+
+/** 监控视图中的 Docker 容器行 */
+export interface ContainerRow {
+  id: string
+  name: string
+  image: string
+  status: ContainerState
+  /** docker 原始状态文本，如 "Up 5 minutes" */
+  statusText?: string
+  /** 宿主机监听端口 */
+  ports: number[]
+  /** 原始端口映射展示文本 */
+  portMap?: string
+  lastActiveAt: number
+}
+
+/** 监控视图中的数据库行（简化展示：运行状态 + 启停控制） */
+export interface DbRow {
+  id: string
+  kind: DbKind
+  label: string
+  icon: string
+  version?: string
+  port?: number
+  pid?: number
+  status: DbRowStatus
+  /** Windows 服务名（识别到时通过服务启停） */
+  service?: string
+  /** 启动命令 */
+  start?: string
+  /** 优雅停止命令 */
+  stop?: string
+  cmdline?: string
+  dir?: string
+  lastActiveAt: number
+}
+
 export interface MonitorSnapshot {
   ts: number
   services: ProcessInfo[]
   background: ProcessInfo[]
+  dbs: DbRow[]
+  containers: ContainerRow[]
   stats: MonitorStats
 }
 

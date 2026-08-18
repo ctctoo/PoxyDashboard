@@ -15,6 +15,7 @@ import { ProcessManager } from './processManager'
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
 let quitting = false
+let appLogger: LoggerService | null = null
 
 function send(channel: string, payload?: unknown): void {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload)
@@ -240,8 +241,9 @@ if (!gotLock) {
       optimizer.watchWindowShortcuts(window)
     })
 
-    const cfg = new ConfigStore()
     const logger = new LoggerService(getLogsDir())
+    appLogger = logger
+    const cfg = new ConfigStore(logger)
     const pm = new ProcessManager(logger)
     const monitor = new MonitorService(cfg, pm)
 
@@ -293,6 +295,7 @@ if (!gotLock) {
 
   app.on('before-quit', () => {
     quitting = true
+    appLogger?.business('总控台退出')
     tray?.destroy()
     tray = null
   })

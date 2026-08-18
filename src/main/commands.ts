@@ -47,9 +47,10 @@ export function hasShellSyntax(cmd: string): boolean {
   return /[|><&]/.test(outside)
 }
 
-export function spawnCommandLine(raw: string, opts: { cwd?: string }): ChildProcessWithoutNullStreams {
+export function spawnCommandLine(raw: string, opts: { cwd?: string; detached?: boolean }): ChildProcessWithoutNullStreams {
   const parsed = parseCommand(raw)
-  const base = { cwd: opts.cwd, windowsHide: true } as const
+  const base: { cwd?: string; windowsHide: boolean; detached?: boolean } = { cwd: opts.cwd, windowsHide: true }
+  if (opts.detached) base.detached = true
   if (parsed.shell || hasShellSyntax(raw)) {
     if (process.platform === 'win32') {
       return spawn('cmd.exe', ['/d', '/s', '/c', raw], { ...base, env: process.env }) as unknown as ChildProcessWithoutNullStreams
@@ -80,6 +81,9 @@ export function findExecutable(exe: string, cwd?: string): string | null {
   let found: string | null = null
   if (/^[A-Za-z]:[\\/]/.test(exe) || exe.startsWith('\\\\') || exe.startsWith('/')) {
     found = existsSync(exe) ? exe : null
+  } else if ((exe.startsWith('.\\') || exe.startsWith('./')) && cwd) {
+    const resolved = join(cwd, exe.slice(2))
+    found = existsSync(resolved) ? resolved : null
   } else {
     found = whichPath(exe)
     if (!found) found = searchKnownRoots(exe)
@@ -92,12 +96,17 @@ export function findExecutable(exe: string, cwd?: string): string | null {
   return found
 }
 
+/** 从 where.exe 输出行中选择可执行文件：优先带 Windows 可执行扩展名的路径，避免选中无扩展名的 Unix 脚本 */
+export function pickExecutablePath(lines: string[]): string | null {
+  const paths = lines.map((l) => l.trim()).filter(Boolean)
+  return paths.find((p) => /\.(exe|cmd|bat|com)$/i.test(p)) ?? paths[0] ?? null
+}
+
 function whichPath(exe: string): string | null {
   try {
     if (process.platform === 'win32') {
       const out = execFileSync('where.exe', [exe], { stdio: ['ignore', 'pipe', 'ignore'], encoding: 'utf8', windowsHide: true })
-      const first = out.split(/\r?\n/)[0]?.trim()
-      return first || null
+      return pickExecutablePath(out.split(/\r?\n/))
     }
     execFileSync('which', [exe], { stdio: 'ignore' })
     return exe

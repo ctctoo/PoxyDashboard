@@ -6,7 +6,8 @@ const PACKAGE_MANAGERS: ReadonlyArray<readonly [string, string]> = [
   ['pnpm-lock.yaml', 'pnpm'],
   ['yarn.lock', 'yarn'],
   ['bun.lockb', 'bun'],
-  ['package-lock.json', 'npm']
+  ['package-lock.json', 'npm'],
+  ['npm-shrinkwrap.json', 'npm']
 ]
 
 const SCRIPT_PRIORITY = ['dev', 'start', 'serve', 'preview', 'web', 'docs:dev', 'docs:start', 'build']
@@ -93,6 +94,34 @@ export function detectProject(dir: string): DetectionResult {
     candidates.push({ command: 'cargo run', kind: 'service', label: 'Rust 服务' })
   }
 
+  const pomPath = firstExisting(dir, ['pom.xml'])
+  if (pomPath) {
+    const pom = readFirst(dir, ['pom.xml']) ?? ''
+    const mvnwWin = existsSync(join(dir, 'mvnw.cmd'))
+    const mvnwSh = existsSync(join(dir, 'mvnw'))
+    const mvn = process.platform === 'win32' && mvnwWin ? '.\\mvnw.cmd' : mvnwSh ? './mvnw' : 'mvn'
+    if (/spring-boot/i.test(pom)) {
+      candidates.unshift({ command: `${mvn} spring-boot:run`, kind: 'service', label: 'Maven · Spring Boot', port: 8080 })
+    } else {
+      candidates.push({ command: `${mvn} compile`, kind: 'task', label: 'Maven 编译' })
+    }
+  }
+
+  const gradlePath = firstExisting(dir, ['build.gradle', 'build.gradle.kts'])
+  if (gradlePath) {
+    const build = readFirst(dir, [basename(gradlePath)]) ?? ''
+    const gradlewWin = existsSync(join(dir, 'gradlew.bat'))
+    const gradlewSh = existsSync(join(dir, 'gradlew'))
+    const gradle = process.platform === 'win32' && gradlewWin ? '.\\gradlew.bat' : gradlewSh ? './gradlew' : 'gradle'
+    if (/spring-boot|org\.springframework\.boot/i.test(build)) {
+      candidates.unshift({ command: `${gradle} bootRun`, kind: 'service', label: 'Gradle · Spring Boot', port: 8080 })
+    } else if (/id\s+['"]application['"]/i.test(build)) {
+      candidates.push({ command: `${gradle} run`, kind: 'service', label: 'Gradle · application' })
+    } else {
+      candidates.push({ command: `${gradle} build`, kind: 'task', label: 'Gradle 构建' })
+    }
+  }
+
   const pyScripts = ['main.py', 'app.py', 'server.py', 'run.py'].filter((f) => existsSync(join(dir, f)))
   for (const f of pyScripts) {
     if (!candidates.some((c) => c.command.includes(f))) {
@@ -129,7 +158,16 @@ export function detectProject(dir: string): DetectionResult {
 
 function guessPortFromScript(script: string): number | undefined {
   const m = script.match(/(?:--port|-p|PORT)\s*[=:]?\s*(\d{2,5})/i)
-  return m ? Number(m[1]) : undefined
+  if (m) return Number(m[1])
+  const s = script.toLowerCase()
+  if (/\bvite\b/.test(s)) return s.includes('preview') ? 4173 : 5173
+  if (/\bnext\b/.test(s)) return 3000
+  if (/\bnuxt\b/.test(s)) return 3000
+  if (/\bnest\b/.test(s)) return 3000
+  if (/\bastro\b/.test(s)) return 4321
+  if (/\bwebpack\b/.test(s) && /\bserve|dev-server|devserver\b/.test(s)) return 8080
+  if (/\bng\s+serve\b/.test(s)) return 4200
+  return undefined
 }
 
 function resolveTypeLabel(candidates: DetectionCandidate[]): string {
@@ -147,6 +185,7 @@ function resolveTypeLabel(candidates: DetectionCandidate[]): string {
   if (labels.some((l) => l.startsWith('node '))) return 'Node 脚本'
   if (labels.some((l) => l.startsWith('go '))) return 'Go'
   if (labels.some((l) => l.startsWith('cargo '))) return 'Rust'
+  if (labels.some((l) => l.includes('Spring Boot'))) return 'Java (Spring Boot)'
   if (labels.some((l) => l.includes('静态'))) return '静态站点'
   return '脚本'
 }

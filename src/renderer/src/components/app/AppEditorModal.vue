@@ -16,7 +16,8 @@ watch(
   () => editorState.value.open,
   (v) => {
     if (v) reset()
-  }
+  },
+  { immediate: true }
 )
 
 function reset(): void {

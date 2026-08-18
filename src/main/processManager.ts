@@ -69,6 +69,7 @@ export class ProcessManager extends EventEmitter {
       lastActiveAt: Date.now()
     }
     this.managed.set(app.id, m)
+    this.logger.business(`认领外部进程「${app.name}」（pid=${m.pid}）`)
     this.emitRuntime(m)
     return this.runtimeOf(m)
   }
@@ -80,6 +81,7 @@ export class ProcessManager extends EventEmitter {
     m.status = 'running'
     m.port = port
     m.lastActiveAt = Date.now()
+    this.logger.business(`「${m.app.name}」端口就绪${port ? ` :${port}` : ''}`)
     this.emitRuntime(m)
   }
 
@@ -109,6 +111,7 @@ export class ProcessManager extends EventEmitter {
       m.pid = app.claimed.pid
       m.status = 'running'
       m.port = app.claimed.port
+      this.logger.business(`启动「${app.name}」：认领外部进程（pid=${m.pid}）`)
       this.emitRuntime(m)
       return this.runtimeOf(m)
     }
@@ -119,6 +122,7 @@ export class ProcessManager extends EventEmitter {
     } catch (err) {
       m.status = 'error'
       m.error = `启动失败：${(err as Error).message}`
+      this.logger.business(`启动「${app.name}」失败：${(err as Error).message}`)
       this.emitRuntime(m)
       return this.runtimeOf(m)
     }
@@ -129,10 +133,12 @@ export class ProcessManager extends EventEmitter {
       if (m.status === 'starting' || m.status === 'running') {
         m.status = 'error'
         m.error = `无法启动：${err.message}`
+        this.logger.business(`「${m.app.name}」无法启动：${err.message}`)
         this.emitRuntime(m)
       }
     })
     child.on('exit', (code, _signal) => this.onExit(m, code, _signal))
+    this.logger.business(`启动「${app.name}」（pid=${child.pid}）`)
     return this.runtimeOf(m)
   }
 
@@ -152,6 +158,8 @@ export class ProcessManager extends EventEmitter {
     m.pid = undefined
     m.port = undefined
     m.startedAt = undefined
+    const statusLabel = m.status === 'success' ? '成功' : m.status === 'failed' ? '失败' : m.status === 'cancelled' ? '已取消' : m.status === 'aborted' ? '已中止' : m.status === 'error' ? '异常退出' : m.status
+    this.logger.business(`「${m.app.name}」已退出（${statusLabel}${code != null ? `，退出码 ${code}` : ''}）`)
     this.emit('exit', { id: m.app.id, app: m.app, runtime: this.runtimeOf(m) })
     this.emitRuntime(m)
   }
@@ -162,6 +170,7 @@ export class ProcessManager extends EventEmitter {
     if (!['starting', 'running'].includes(m.status)) return this.runtimeOf(m)
     m.stopRequested = true
     m.status = 'stopping'
+    this.logger.business(`正在停止「${m.app.name}」...`)
     this.emitRuntime(m)
     if (m.pid) await killTree(m.pid)
     if (!m.child) {

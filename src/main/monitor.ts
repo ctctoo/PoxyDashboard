@@ -1,6 +1,10 @@
 import { EventEmitter } from 'events'
 import { cpus } from 'os'
-import type { AppRuntime, MonitorSnapshot, PortAlert, ProcessInfo } from '../shared/types'
+import type { AppRuntime, ContainerRow, DbRow, MonitorSnapshot, PortAlert, ProcessInfo } from '../shared/types'
+import { killTree, spawnCommandLine } from './commands'
+import { identifyDb } from './dbDetect'
+import { parseDockerPortMap, parseDockerPorts, scanDocker } from './dockerScan'
+import type { RawContainer } from './dockerScan'
 import { guessCwd } from './projectDetect'
 import { buildOwnTree, classifyOrigin, scanPorts } from './portScanner'
 import type { ScanData } from './portScanner'
@@ -8,6 +12,8 @@ import type { ConfigStore } from './config'
 import type { ProcessManager } from './processManager'
 
 const SCAN_INTERVAL = 5000
+/** Docker 扫描间隔：每 3 个端口扫描周期执行一次（约 15s） */
+const DOCKER_SCAN_INTERVAL = 3
 
 const SYSTEM_NOISE = new Set([
   'system',
@@ -48,6 +54,11 @@ export class MonitorService extends EventEmitter {
   private lastSnapshot: MonitorSnapshot | null = null
   private scanning = false
   private firstScan = true
+  /** 会话内数据库实例表（含已停止的记录，支持重新启动） */
+  private dbRows = new Map<string, DbRow>()
+  /** 会话内容器表（含已停止的记录，支持重新启动） */
+  private containerRows = new Map<string, ContainerRow>()
+  private scanCount = 0
 
   constructor(
     private cfg: ConfigStore,
@@ -108,6 +119,138 @@ export class MonitorService extends EventEmitter {
     }
   }
 
+  getDbRows(): DbRow[] {
+    return [...this.dbRows.values()]
+  }
+
+  private emitDbChanged(): void {
+    this.emit('db:changed', this.getDbRows())
+  }
+
+  getContainers(): ContainerRow[] {
+    return [...this.containerRows.values()].sort((a, b) => {
+      const sa = a.status === 'running' ? 0 : 1
+      const sb = b.status === 'running' ? 0 : 1
+      return sa - sb || a.name.localeCompare(b.name)
+    })
+  }
+
+  private emitContainersChanged(): void {
+    this.emit('containers:changed', this.getContainers())
+  }
+
+  /** 停止容器：执行 docker stop 优雅停止 */
+  async stopContainer(id: string): Promise<ContainerRow | undefined> {
+    const row = this.containerRows.get(id)
+    if (!row) return undefined
+    if (row.status !== 'running') return row
+    this.containerRows.set(id, { ...row, status: 'stopping', lastActiveAt: Date.now() })
+    this.emitContainersChanged()
+    await this.runControl(`docker stop ${row.id}`)
+    return this.containerRows.get(id)
+  }
+
+  /** 启动容器：执行 docker start */
+  async startContainer(id: string): Promise<ContainerRow | undefined> {
+    const row = this.containerRows.get(id)
+    if (!row) return undefined
+    if (row.status === 'running' || row.status === 'starting') return row
+    this.containerRows.set(id, { ...row, status: 'starting', lastActiveAt: Date.now() })
+    this.emitContainersChanged()
+    await this.runControl(`docker start ${row.id}`)
+    return this.containerRows.get(id)
+  }
+
+  /** 停止数据库：优先优雅关闭命令，其次服务停止，最后强制结束进程树 */
+  async stopDb(id: string): Promise<DbRow | undefined> {
+    const row = this.dbRows.get(id)
+    if (!row) return undefined
+    if (row.status !== 'running') return row
+    const pid = row.pid
+    this.dbRows.set(id, { ...row, status: 'stopping', lastActiveAt: Date.now() })
+    this.emitDbChanged()
+
+    if (row.stop) {
+      await this.runControl(row.stop, row.dir)
+    }
+    if (pid) {
+      await delay(2500)
+      if (this.isPidAlive(pid) && row.service) {
+        await this.runControl(`sc stop "${row.service}"`)
+      }
+      await delay(2500)
+      if (pid && this.isPidAlive(pid)) {
+        await killTree(pid)
+      }
+    }
+    this.emitDbChanged()
+    return this.dbRows.get(id)
+  }
+
+  /** 启动数据库：有服务名走服务启动，否则按原命令行 detached 拉起 */
+  async startDb(id: string): Promise<DbRow | undefined> {
+    const row = this.dbRows.get(id)
+    if (!row) return undefined
+    if (row.status === 'running' || row.status === 'starting') return row
+    this.dbRows.set(id, { ...row, status: 'starting', lastActiveAt: Date.now() })
+    this.emitDbChanged()
+
+    if (row.service) {
+      await this.runControl(`sc start "${row.service}"`)
+    } else if (row.start) {
+      try {
+        const child = spawnCommandLine(row.start, { cwd: row.dir, detached: true })
+        child.unref?.()
+        child.on('error', () => undefined)
+      } catch {
+        /* 启动失败由下一轮扫描反映 */
+      }
+    }
+    this.emitDbChanged()
+    return this.dbRows.get(id)
+  }
+
+  dismissDb(id: string): void {
+    if (this.dbRows.delete(id)) this.emitDbChanged()
+  }
+
+  private isPidAlive(pid: number): boolean {
+    if (this.lastScan && this.lastScan.procs.has(pid)) return true
+    try {
+      process.kill(pid, 0)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  private runControl(cmd: string, cwd?: string): Promise<void> {
+    return new Promise((resolve) => {
+      let child
+      try {
+        child = spawnCommandLine(cmd, { cwd })
+      } catch {
+        resolve()
+        return
+      }
+      const timer = setTimeout(() => {
+        try {
+          child.kill()
+        } catch {
+          /* 忽略 */
+        }
+      }, 8000)
+      child.on('close', () => {
+        clearTimeout(timer)
+        resolve()
+      })
+      child.on('error', () => {
+        clearTimeout(timer)
+        resolve()
+      })
+    })
+  }
+
   private async tick(): Promise<void> {
     if (this.scanning) return
     this.scanning = true
@@ -115,6 +258,7 @@ export class MonitorService extends EventEmitter {
       const data = await scanPorts()
       this.lastScan = data
       this.processScan(data)
+      if (++this.scanCount % DOCKER_SCAN_INTERVAL === 0) await this.scanContainers()
     } catch (err) {
       console.error('端口扫描失败', err)
     } finally {
@@ -122,9 +266,91 @@ export class MonitorService extends EventEmitter {
     }
   }
 
+  private async scanContainers(): Promise<void> {
+    try {
+      const result = await scanDocker()
+      if (!result.ok) return
+      this.syncContainers(result.items)
+    } catch {
+      /* docker 扫描失败忽略，下一轮重试 */
+    }
+  }
+
+  /** 根据 docker ps 结果同步容器表：运行中的 upsert，消失的标记为已停止 */
+  private syncContainers(raw: RawContainer[]): void {
+    const now = Date.now()
+    const seen = new Set<string>()
+    for (const c of raw) {
+      seen.add(c.id)
+      const existing = this.containerRows.get(c.id)
+      const row: ContainerRow = {
+        id: c.id,
+        name: c.name,
+        image: c.image,
+        status: 'running',
+        statusText: c.status,
+        ports: parseDockerPorts(c.ports),
+        portMap: parseDockerPortMap(c.ports) || existing?.portMap,
+        lastActiveAt: now
+      }
+      this.containerRows.set(c.id, row)
+    }
+    let changed = false
+    for (const [id, row] of this.containerRows) {
+      if (seen.has(id)) continue
+      if (row.status === 'running' || row.status === 'starting' || row.status === 'stopping') {
+        this.containerRows.set(id, { ...row, status: 'stopped', lastActiveAt: now })
+        changed = true
+      }
+    }
+    if (changed) this.emitContainersChanged()
+  }
+
   private processScan(data: ScanData): void {
     const ownTree = buildOwnTree(data)
     const children = buildChildrenMap(data)
+
+    const snapshot = this.buildSnapshot(data, ownTree)
+    this.lastSnapshot = snapshot
+
+    const alerts: PortAlert[] = []
+    const managedPorts = this.collectManagedPorts(data, children)
+    for (const c of data.conns) {
+      if (ownTree.has(c.pid)) continue
+      if (
+        this.knownPorts.has(c.port) ||
+        this.dismissedPorts.has(c.port) ||
+        this.cfg.isPortHidden(c.port) ||
+        this.cfg.isPortIgnored(c.port)
+      )
+        continue
+      this.knownPorts.add(c.port)
+      if (managedPorts.has(c.port)) continue
+      if (this.firstScan) continue
+      const p = data.procs.get(c.pid)
+      alerts.push({
+        port: c.port,
+        pid: c.pid,
+        name: p?.name ?? `PID ${c.pid}`,
+        cmdline: p?.cmd ?? '',
+        dir: p ? guessCwd(p.cmd) : undefined,
+        localAddress: c.addr,
+        origin: p ? classifyOrigin(c.pid, data.procs, ownTree) : undefined
+      })
+    }
+    this.firstScan = false
+    if (alerts.length) {
+      this.lastAlerts = [...this.lastAlerts, ...alerts]
+      this.emit('alerts', alerts)
+    }
+
+    this.updateClaimed(data)
+    this.updateManagedServices(data, children)
+
+    this.emit('snapshot', snapshot)
+  }
+
+  private buildSnapshot(data: ScanData, ownTree: Set<number>): MonitorSnapshot {
     const now = Date.now()
     const cpuByPid = new Map<number, number>()
     for (const [pid, perf] of data.perf) {
@@ -168,7 +394,8 @@ export class MonitorService extends EventEmitter {
         memMB: perf ? Math.round((perf.mem / 1048576) * 10) / 10 : 0,
         ports,
         origin: classifyOrigin(pid, data.procs, ownTree),
-        claimedBy
+        claimedBy,
+        db: identifyDb({ name: p.name, cmdline: p.cmd ?? '', binaryPath: perf?.path, port: ports.length ? Math.min(...ports) : undefined })
       }
       if (ports.length) {
         if (!visiblePorts.length) continue
@@ -181,40 +408,6 @@ export class MonitorService extends EventEmitter {
     services.sort((a, b) => a.pid - b.pid)
     background.sort((a, b) => b.memMB - a.memMB)
     const trimmedBackground = background.slice(0, 80)
-
-    const alerts: PortAlert[] = []
-    const managedPorts = this.collectManagedPorts(data, children)
-    for (const c of data.conns) {
-      if (ownTree.has(c.pid)) continue
-      if (
-        this.knownPorts.has(c.port) ||
-        this.dismissedPorts.has(c.port) ||
-        this.cfg.isPortHidden(c.port) ||
-        this.cfg.isPortIgnored(c.port)
-      )
-        continue
-      this.knownPorts.add(c.port)
-      if (managedPorts.has(c.port)) continue
-      if (this.firstScan) continue
-      const p = data.procs.get(c.pid)
-      alerts.push({
-        port: c.port,
-        pid: c.pid,
-        name: p?.name ?? `PID ${c.pid}`,
-        cmdline: p?.cmd ?? '',
-        dir: p ? guessCwd(p.cmd) : undefined,
-        localAddress: c.addr,
-        origin: p ? classifyOrigin(c.pid, data.procs, ownTree) : undefined
-      })
-    }
-    this.firstScan = false
-    if (alerts.length) {
-      this.lastAlerts = [...this.lastAlerts, ...alerts]
-      this.emit('alerts', alerts)
-    }
-
-    this.updateClaimed(data)
-    this.updateManagedServices(data, children)
 
     let totalCpu = 0
     let totalMem = 0
@@ -234,10 +427,13 @@ export class MonitorService extends EventEmitter {
       // 回退：按单进程差分求和
       for (const v of cpuByPid.values()) totalCpu += v
     }
-    this.lastSnapshot = {
+    const dbs = this.syncDbRows(services, data)
+    return {
       ts: data.ts,
       services,
       background: trimmedBackground,
+      dbs,
+      containers: this.getContainers(),
       stats: {
         serviceCount: services.length,
         backgroundCount: background.length,
@@ -247,7 +443,58 @@ export class MonitorService extends EventEmitter {
         cores: cpus().length
       }
     }
-    this.emit('snapshot', this.lastSnapshot)
+  }
+
+  /** 根据本轮扫描结果同步数据库实例表：运行中的 upsert，消失的标记为已停止 */
+  private syncDbRows(services: ProcessInfo[], data: ScanData): DbRow[] {
+    const now = Date.now()
+    const seen = new Set<string>()
+    for (const s of services) {
+      if (!s.db) continue
+      const binaryPath = data.perf.get(s.pid)?.path
+      const key = this.dbKey(s, binaryPath)
+      seen.add(key)
+      const existing = this.dbRows.get(key)
+      const row: DbRow = {
+        id: key,
+        kind: s.db.kind,
+        label: s.db.label,
+        icon: s.db.icon,
+        version: s.db.version,
+        port: s.ports.length ? Math.min(...s.ports) : existing?.port,
+        pid: s.pid,
+        status: 'running',
+        service: s.db.service ?? existing?.service,
+        start: s.db.start ?? existing?.start,
+        stop: s.db.stop ?? existing?.stop,
+        cmdline: s.cmdline,
+        dir: s.dir,
+        lastActiveAt: now
+      }
+      this.dbRows.set(key, row)
+    }
+    for (const [key, row] of this.dbRows) {
+      if (seen.has(key)) continue
+      if (row.status === 'running' || row.status === 'starting' || row.status === 'stopping') {
+        this.dbRows.set(key, { ...row, status: 'stopped', pid: undefined, lastActiveAt: now })
+      }
+    }
+    // 限制会话内记录数量，防止无界增长
+    if (this.dbRows.size > 80) {
+      const sorted = [...this.dbRows.values()].sort((a, b) => a.lastActiveAt - b.lastActiveAt)
+      for (const r of sorted.slice(0, this.dbRows.size - 80)) this.dbRows.delete(r.id)
+    }
+    return [...this.dbRows.values()].sort((a, b) => {
+      const sa = a.status === 'running' || a.status === 'starting' || a.status === 'stopping' ? 0 : 1
+      const sb = b.status === 'running' || b.status === 'starting' || b.status === 'stopping' ? 0 : 1
+      return sa - sb || (a.port ?? 0) - (b.port ?? 0)
+    })
+  }
+
+  private dbKey(s: ProcessInfo, binaryPath?: string | null): string {
+    if (binaryPath) return `bin:${binaryPath.toLowerCase()}`
+    const base = (s.cmdline || '').replace(/\d+/g, '').toLowerCase()
+    return `cmd:${s.db!.kind}:${base}`
   }
 
   private findClaimedApp(pid: number): string | undefined {
@@ -327,6 +574,10 @@ function buildChildrenMap(data: ScanData): Map<number, number[]> {
     children.set(p.ppid, list)
   }
   return children
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms))
 }
 
 function descendants(root: number, children: Map<number, number[]>): number[] {

@@ -5,6 +5,8 @@ import type {
   AppKind,
   AppRuntime,
   ConfigFile,
+  ContainerRow,
+  DbRow,
   DetectionResult,
   HiddenPortEntry,
   LogLine,
@@ -42,6 +44,13 @@ export interface Api {
   getMonitorState(): Promise<MonitorSnapshot | null>
   getHiddenPorts(): Promise<HiddenPortEntry[]>
 
+  stopDb(id: string): Promise<DbRow | undefined>
+  startDb(id: string): Promise<DbRow | undefined>
+  dismissDb(id: string): Promise<void>
+
+  stopContainer(id: string): Promise<ContainerRow | undefined>
+  startContainer(id: string): Promise<ContainerRow | undefined>
+
   claimPort(port: number): Promise<AppConfig>
   dismissPort(port: number): Promise<void>
   ignorePort(port: number): Promise<void>
@@ -64,6 +73,8 @@ export interface AppEvents {
   'apps:runtime': { id: string; runtime: AppRuntime }
   'monitor:snapshot': MonitorSnapshot
   'monitor:alerts': PortAlert[]
+  'db:changed': DbRow[]
+  'containers:changed': ContainerRow[]
   'logs:append': { appId: string; lines: LogLine[] }
   'settings:changed': Settings
   shortcut: 'palette' | 'logs'
