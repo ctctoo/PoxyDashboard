@@ -11,8 +11,7 @@ import type {
   Settings,
   ValidationResult
 } from '../shared/types'
-import { killTree, spawnCommandLine } from './commands'
-import { resolveAgentLaunch } from './agentLauncher'
+import { killTree } from './commands'
 import type { ConfigStore } from './config'
 import { defaultRuntime } from './processManager'
 import type { ProcessManager } from './processManager'
@@ -49,8 +48,18 @@ export function registerIpc(deps: IpcDeps): void {
   pm.on('exit', ({ id, app, runtime }: { id: string; app: AppConfig; runtime: AppRuntime }) => {
     broadcast('apps:runtime', { id, runtime })
     if (app.kind === 'task' && cfg.data.settings.notifyTaskComplete) {
-      const label = runtime.status === 'success' ? '成功' : runtime.status === 'failed' ? '失败' : runtime.status === 'cancelled' ? '已取消' : '已中止'
-      showNotification(`任务「${app.name}」${label}`, runtime.exitCode != null ? `退出码 ${runtime.exitCode}` : '')
+      const label =
+        runtime.status === 'success'
+          ? '成功'
+          : runtime.status === 'failed'
+            ? '失败'
+            : runtime.status === 'cancelled'
+              ? '已取消'
+              : '已中止'
+      showNotification(
+        `任务「${app.name}」${label}`,
+        runtime.exitCode != null ? `退出码 ${runtime.exitCode}` : ''
+      )
     }
   })
   logger.on('line', ({ appId, lines }: { appId: string; lines: unknown[] }) => {
@@ -140,12 +149,20 @@ export function registerIpc(deps: IpcDeps): void {
     if (!app) throw new Error('应用不存在')
     const v = validateAppConfig(app)
     if (!v.ok) {
-      const runtime: AppRuntime = { status: 'error', error: v.issues.filter((i) => i.level === 'error').map((i) => i.message).join('；') }
+      const runtime: AppRuntime = {
+        status: 'error',
+        error: v.issues
+          .filter((i) => i.level === 'error')
+          .map((i) => i.message)
+          .join('；')
+      }
       logger.business(`启动「${app.name}」失败：${runtime.error}`)
       return runtime
     }
     const runtime = pm.start(app)
-    logger.business(`启动「${app.name}」：${runtime.status === 'error' ? `失败（${runtime.error}）` : `pid=${runtime.pid}`}`)
+    logger.business(
+      `启动「${app.name}」：${runtime.status === 'error' ? `失败（${runtime.error}）` : `pid=${runtime.pid}`}`
+    )
     return runtime
   })
   ipcMain.handle('apps:stop', async (_e, id: string) => {
@@ -169,12 +186,17 @@ export function registerIpc(deps: IpcDeps): void {
     }
     const v = validateAppConfig(app)
     if (!v.ok) {
-      const error = v.issues.filter((i) => i.level === 'error').map((i) => i.message).join('；')
+      const error = v.issues
+        .filter((i) => i.level === 'error')
+        .map((i) => i.message)
+        .join('；')
       logger.business(`重启「${app.name}」失败：${error}`)
       return { status: 'error', error } as AppRuntime
     }
     const runtime = await pm.restart(app)
-    logger.business(`重启「${app.name}」：${runtime.status === 'error' ? `失败（${runtime.error}）` : `pid=${runtime.pid}`}`)
+    logger.business(
+      `重启「${app.name}」：${runtime.status === 'error' ? `失败（${runtime.error}）` : `pid=${runtime.pid}`}`
+    )
     return runtime
   })
   ipcMain.handle('apps:stopAll', async () => {
@@ -183,14 +205,20 @@ export function registerIpc(deps: IpcDeps): void {
   })
   ipcMain.handle('apps:validate', (_e, id: string): ValidationResult => {
     const app = cfg.getApp(id)
-    if (!app) return { ok: false, issues: [{ level: 'error', message: '应用不存在', fix: '刷新后重试' }] }
+    if (!app)
+      return { ok: false, issues: [{ level: 'error', message: '应用不存在', fix: '刷新后重试' }] }
     const r = validateAppConfig(app)
-    logger.business(`校验「${app.name}」：${r.ok ? '通过' : r.issues.map((i) => i.message).join('；')}`)
+    logger.business(
+      `校验「${app.name}」：${r.ok ? '通过' : r.issues.map((i) => i.message).join('；')}`
+    )
     return r
   })
 
   ipcMain.handle('dialog:pickDirectory', async () => {
-    const r = await dialog.showOpenDialog({ properties: ['openDirectory'], title: '选择工作区文件夹' })
+    const r = await dialog.showOpenDialog({
+      properties: ['openDirectory'],
+      title: '选择工作区文件夹'
+    })
     return r.canceled || !r.filePaths.length ? null : r.filePaths[0]
   })
   ipcMain.handle('dialog:pickScript', async () => {
@@ -277,7 +305,10 @@ export function registerIpc(deps: IpcDeps): void {
     logger.business(`取消隐藏端口 :${port}`)
     broadcast('apps:changed', cfg.data)
   })
-  const safeKill = async (pid: number, action: string): Promise<{ ok: boolean; reason?: string }> => {
+  const safeKill = async (
+    pid: number,
+    action: string
+  ): Promise<{ ok: boolean; reason?: string }> => {
     if (!pid || pid <= 0) {
       logger.business(`${action}：无效 pid=${pid}`)
       return { ok: false, reason: 'invalid' }
@@ -296,36 +327,7 @@ export function registerIpc(deps: IpcDeps): void {
     await safeKill(pid, '强制结束进程')
   })
 
-  // ---- AI Agent 管理 ----
-  const launchAgent = (kind: string, action: string, dir?: string): { ok: boolean; reason?: string } => {
-    const cmd = resolveAgentLaunch(kind, dir)
-    if (!cmd) {
-      logger.business(`无法自动${action} AI agent「${kind}」：未配置启动命令`)
-      return { ok: false, reason: 'unknown' }
-    }
-    try {
-      const child = spawnCommandLine(cmd, { cwd: dir?.trim() || undefined })
-      child.unref?.()
-      child.on('error', () => undefined)
-      logger.business(`${action} AI agent「${kind}」：${cmd}`)
-      return { ok: true }
-    } catch {
-      logger.business(`${action} AI agent「${kind}」失败：${cmd}`)
-      return { ok: false, reason: 'failed' }
-    }
-  }
-
-  ipcMain.handle('agents:stopTask', (_e, pid: number) => safeKill(pid, '结束 AI agent 任务进程'))
-  ipcMain.handle('agents:stopAgent', (_e, pid: number) => safeKill(pid, '退出 AI agent 应用'))
-  ipcMain.handle('agents:getLaunchDir', (_e, kind: string) => cfg.getAgentDir(kind) ?? null)
-  ipcMain.handle('agents:setLaunchDir', (_e, kind: string, dir: string) => {
-    const d = cfg.setAgentDir(kind, dir)
-    logger.business(`设置「${kind}」启动目录：${d || '（已清除）'}`)
-    broadcast('apps:changed', cfg.data)
-    return d
-  })
-  ipcMain.handle('agents:startAgent', (_e, kind: string, dir?: string) => launchAgent(kind, '启动', dir))
-  ipcMain.handle('agents:restartAgent', (_e, kind: string, dir?: string) => launchAgent(kind, '重启', dir))
+  // ---- AI Agent（仅展示运行中 agent，无控制能力） ----
   ipcMain.handle('db:stop', async (_e, id: string) => {
     const row = await monitor.stopDb(id)
     logger.business(`停止数据库「${row?.label ?? id}」`)

@@ -1,26 +1,31 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { Bot, ChevronDown, ChevronRight, Cpu, Folder, FolderOpen, HardDrive, Play, Power, RotateCw, Square, XCircle } from '@lucide/vue'
-import type { AgentRow } from '@shared/types'
+import { computed, ref } from 'vue'
+import { Power, Search } from '@lucide/vue'
 import {
   agents,
-  formatDuration,
-  getLaunchDir,
-  installedCount,
-  pickLaunchDir,
-  restartAgent,
+  filteredAgents,
+  groupByKind,
+  groupedAgents,
   runningCount,
-  startAgent,
-  stopAgent,
-  stopTask,
+  searchText,
+  sortKey,
   totalCpu,
-  totalMemMB
+  totalMemMB,
+  type AgentSortKey
 } from '../stores/agents'
+import { monitorReady } from '../stores/monitor'
 import { formatMem } from '../lib/fmt'
+import AgentCard from '../components/AgentCard.vue'
+import ViewLoading from '../components/ViewLoading.vue'
 
 const expanded = ref<Set<string>>(new Set())
-const actingTask = ref<number | null>(null)
-const actingAgent = ref<string | null>(null)
+
+const sortOptions: Array<{ value: AgentSortKey; label: string }> = [
+  { value: 'cpu', label: '按 CPU' },
+  { value: 'mem', label: '按内存' },
+  { value: 'taskCount', label: '按任务数' },
+  { value: 'lastActive', label: '按最近活动' }
+]
 
 function toggle(id: string): void {
   const s = new Set(expanded.value)
@@ -29,238 +34,117 @@ function toggle(id: string): void {
   expanded.value = s
 }
 
-async function onStopTask(pid: number): Promise<void> {
-  actingTask.value = pid
-  try {
-    await stopTask(pid)
-  } finally {
-    actingTask.value = null
-  }
-}
-
-async function onStopAgent(row: AgentRow): Promise<void> {
-  actingAgent.value = row.id
-  try {
-    await stopAgent(row)
-  } finally {
-    actingAgent.value = null
-  }
-}
-
-async function onRestartAgent(row: AgentRow): Promise<void> {
-  actingAgent.value = row.id
-  try {
-    await restartAgent(row)
-  } finally {
-    actingAgent.value = null
-  }
-}
-
-async function onStartAgent(row: AgentRow): Promise<void> {
-  actingAgent.value = row.id
-  try {
-    await startAgent(row)
-  } finally {
-    actingAgent.value = null
-  }
-}
-
-async function onPickDir(row: AgentRow): Promise<void> {
-  actingAgent.value = row.id
-  try {
-    await pickLaunchDir(row.kind)
-  } finally {
-    actingAgent.value = null
-  }
-}
-
-function statusLabel(row: AgentRow): string {
-  if (row.status === 'running') return '运行中'
-  if (row.status === 'idle') return '空闲'
-  return '未启动'
-}
+const isGrouped = computed(() => groupByKind.value && Object.keys(groupedAgents.value).length > 1)
 </script>
 
 <template>
-  <div class="scroll-slim h-full space-y-6 overflow-auto pb-4 pr-1">
-    <!-- 顶部统计条 -->
-    <header class="flex flex-wrap items-center gap-2">
-      <span class="flex items-center gap-2 rounded-[6px] border border-line bg-paper-raised px-3 py-1.5 font-mono text-xs text-ink-soft dark:border-coal-line dark:bg-coal-raised dark:text-chalk-soft">
-        共 <b class="text-ink dark:text-chalk">{{ agents.length }}</b> 个 agent
-      </span>
-      <span class="flex items-center gap-2 rounded-[6px] border border-go/30 bg-go/8 px-3 py-1.5 font-mono text-xs text-go dark:text-go-soft">
-        <span class="h-1.5 w-1.5 rounded-full bg-go pulse-dot" />
-        <b>{{ runningCount }}</b> 运行中
-      </span>
-      <span
-        v-if="installedCount"
-        class="flex items-center gap-2 rounded-[6px] border border-inspect/30 bg-inspect/8 px-3 py-1.5 font-mono text-xs text-inspect dark:text-inspect-soft"
-      >
-        <b>{{ installedCount }}</b> 已安装未启动
-      </span>
-      <span class="flex items-center gap-2 rounded-[6px] border border-line bg-paper-raised px-3 py-1.5 font-mono text-xs text-ink-soft dark:border-coal-line dark:bg-coal-raised dark:text-chalk-soft">
-        <Cpu :size="13" class="text-warn" /> CPU {{ totalCpu }}%
-      </span>
-      <span class="flex items-center gap-2 rounded-[6px] border border-line bg-paper-raised px-3 py-1.5 font-mono text-xs text-ink-soft dark:border-coal-line dark:bg-coal-raised dark:text-chalk-soft">
-        <HardDrive :size="13" class="text-inspect" /> {{ formatMem(totalMemMB) }}
-      </span>
-    </header>
-
-    <!-- Agent 卡片列表 -->
-    <div v-if="agents.length" class="grid grid-cols-[repeat(auto-fill,minmax(360px,1fr))] gap-3">
-      <article
-        v-for="row in agents"
-        :key="row.id"
-        class="card relative flex flex-col overflow-hidden p-4"
-        :class="row.status === 'not-running' ? 'opacity-90' : ''"
-      >
+  <div class="h-full">
+    <ViewLoading v-if="!monitorReady" label="正在检测本机运行中的 AI Agent…" />
+    <div v-else class="scroll-slim h-full space-y-6 overflow-auto pb-4 pr-1">
+      <!-- 顶部统计条 -->
+      <header class="flex flex-wrap items-center gap-2">
         <span
-          class="absolute inset-x-0 top-0 h-[3px]"
-          :class="row.status === 'running' ? 'bg-go' : row.status === 'idle' ? 'bg-warn' : 'bg-ink/15 dark:bg-white/15'"
-        />
+          class="flex items-center gap-2 rounded-[6px] border border-line bg-paper-raised px-3 py-1.5 font-mono text-xs text-ink-soft dark:border-coal-line dark:bg-coal-raised dark:text-chalk-soft"
+        >
+          共 <b class="text-ink dark:text-chalk">{{ agents.length }}</b> 个运行中
+        </span>
+        <span
+          class="flex items-center gap-2 rounded-[6px] border border-go/30 bg-go/8 px-3 py-1.5 font-mono text-xs text-go dark:text-go-soft"
+        >
+          <span class="h-1.5 w-1.5 rounded-full bg-go pulse-dot" />
+          <b>{{ runningCount }}</b> 活跃
+        </span>
+        <span
+          class="flex items-center gap-2 rounded-[6px] border border-line bg-paper-raised px-3 py-1.5 font-mono text-xs text-ink-soft dark:border-coal-line dark:bg-coal-raised dark:text-chalk-soft"
+        >
+          <b>CPU</b> {{ totalCpu }}%
+        </span>
+        <span
+          class="flex items-center gap-2 rounded-[6px] border border-line bg-paper-raised px-3 py-1.5 font-mono text-xs text-ink-soft dark:border-coal-line dark:bg-coal-raised dark:text-chalk-soft"
+        >
+          <b>内存</b> {{ formatMem(totalMemMB) }}
+        </span>
+      </header>
 
-        <!-- 卡片头 -->
-        <div class="flex items-center gap-2.5">
-          <span
-            class="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-line bg-paper text-lg leading-none dark:border-coal-line dark:bg-black/25"
-            :class="row.status === 'not-running' ? 'grayscale' : ''"
-          >
-            {{ row.icon }}
-          </span>
-          <div class="min-w-0 flex-1">
-            <div class="flex items-center gap-2">
-              <span class="truncate font-semibold">{{ row.label }}</span>
-              <span class="rounded-[5px] border border-line px-1.5 font-mono text-[10px] uppercase tracking-wide text-ink-soft dark:border-coal-line dark:text-chalk-soft">
-                {{ row.kind }}
-              </span>
-            </div>
-            <div class="mt-0.5 flex items-center gap-2 font-mono text-[11px] text-ink-soft dark:text-chalk-soft">
-              <span
-                class="flex items-center gap-1"
-                :class="row.status === 'running' ? 'text-go' : row.status === 'idle' ? 'text-warn' : 'text-ink-soft/60 dark:text-chalk-soft/60'"
-              >
-                <span
-                  class="h-1.5 w-1.5 rounded-full"
-                  :class="row.status === 'running' ? 'bg-go pulse-dot' : row.status === 'idle' ? 'bg-warn' : 'bg-current'"
-                />
-                {{ statusLabel(row) }}
-              </span>
-              <span v-if="row.pid">PID {{ row.pid }}</span>
-              <span v-if="row.createdAt">{{ formatDuration(Date.now() - row.createdAt) }}</span>
-            </div>
-          </div>
-          <span v-if="row.ports.length" class="chip-port" :title="row.ports.map((p) => `:${p}`).join(' · ')">
-            :{{ row.ports[0] }}{{ row.ports.length > 1 ? ` +${row.ports.length - 1}` : '' }}
-          </span>
+      <!-- 排序 / 搜索 / 分组 -->
+      <div class="flex flex-wrap items-center gap-2">
+        <select
+          v-model="sortKey"
+          class="input !h-7 !w-auto !py-0 font-mono text-xs"
+          title="排序方式"
+        >
+          <option v-for="opt in sortOptions" :key="opt.value" :value="opt.value">
+            {{ opt.label }}
+          </option>
+        </select>
+        <label
+          class="flex cursor-pointer items-center gap-1.5 font-mono text-xs text-ink-soft dark:text-chalk-soft"
+        >
+          <input v-model="groupByKind" type="checkbox" class="accent-signal" />
+          按类型分组
+        </label>
+        <div class="relative min-w-0 flex-1">
+          <Search
+            :size="13"
+            class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-soft/50 dark:text-chalk-soft/50"
+          />
+          <input
+            v-model="searchText"
+            class="input h-7 w-full pl-8 font-mono text-xs"
+            placeholder="搜索 agent 名称或类型"
+          />
         </div>
-
-        <!-- 资源行 -->
-        <div class="mt-3 flex items-center gap-4 border-t border-line pt-3 font-mono text-xs dark:border-coal-line">
-          <span class="flex items-center gap-1.5 text-ink-soft dark:text-chalk-soft">
-            <Cpu :size="13" class="text-warn" /> <b class="tabular-nums text-ink dark:text-chalk">{{ row.cpu }}%</b>
-          </span>
-          <span class="flex items-center gap-1.5 text-ink-soft dark:text-chalk-soft">
-            <HardDrive :size="13" class="text-inspect" /> <b class="tabular-nums text-ink dark:text-chalk">{{ formatMem(row.memMB) }}</b>
-          </span>
-          <span v-if="row.status !== 'not-running'" class="ml-auto text-ink-soft/70 dark:text-chalk-soft/70">{{ row.taskCount }} 个任务进程</span>
-        </div>
-
-        <!-- 启动工作目录 -->
-        <div class="mt-2 flex items-center gap-1.5 rounded-md border border-line/70 bg-paper px-2 py-1.5 font-mono text-[11px] dark:border-coal-line/70 dark:bg-black/20">
-          <Folder :size="12" class="shrink-0 text-inspect" />
-          <span v-if="getLaunchDir(row.kind)" class="min-w-0 flex-1 truncate text-ink-soft dark:text-chalk-soft" :title="getLaunchDir(row.kind) ?? undefined">
-            {{ getLaunchDir(row.kind) }}
-          </span>
-          <span v-else class="flex-1 text-ink-soft/60 dark:text-chalk-soft/60">未设置启动目录</span>
-          <button
-            class="icon-btn !h-5 !w-5 hover:!text-signal"
-            :title="getLaunchDir(row.kind) ? '更换启动目录' : '选择启动目录'"
-            :disabled="actingAgent === row.id"
-            @click="onPickDir(row)"
-          >
-            <FolderOpen v-if="actingAgent !== row.id" :size="12" />
-            <span v-else class="h-3 w-3 animate-spin rounded-full border-2 border-signal/40 border-t-signal" />
-          </button>
-        </div>
-
-        <!-- 派生任务进程 -->
-        <template v-if="row.status !== 'not-running'">
-          <div v-if="row.tasks.length" class="mt-2">
-            <button
-              class="flex w-full items-center gap-1.5 rounded-md px-1 py-1 font-mono text-[11px] font-semibold uppercase tracking-wide text-ink-soft hover:text-signal dark:text-chalk-soft dark:hover:text-signal-soft"
-              @click="toggle(row.id)"
-            >
-              <ChevronRight v-if="!expanded.has(row.id)" :size="13" />
-              <ChevronDown v-else :size="13" />
-              派生任务
-            </button>
-            <div v-if="expanded.has(row.id)" class="mt-1 space-y-1">
-              <div
-                v-for="t in row.tasks"
-                :key="t.pid"
-                class="flex items-center gap-2 rounded-md border border-line/70 bg-paper px-2 py-1.5 dark:border-coal-line/70 dark:bg-black/20"
-              >
-                <span class="grid h-6 w-6 shrink-0 place-items-center rounded bg-ink/5 text-ink-soft dark:bg-white/10 dark:text-chalk-soft">
-                  <Bot :size="13" />
-                </span>
-                <div class="min-w-0 flex-1">
-                  <div class="flex items-center gap-2">
-                    <span class="truncate text-xs font-medium">{{ t.name }}</span>
-                    <span class="font-mono text-[10px] text-ink-soft/60 dark:text-chalk-soft/60">PID {{ t.pid }}</span>
-                  </div>
-                  <div class="truncate font-mono text-[10px] text-ink-soft dark:text-chalk-soft">{{ t.cmdline }}</div>
-                </div>
-                <span class="shrink-0 font-mono text-[10px] tabular-nums text-ink-soft dark:text-chalk-soft">{{ t.cpu }}% · {{ formatMem(t.memMB) }}</span>
-                <button
-                  class="icon-btn !h-6 !w-6 hover:!text-alert"
-                  title="安全结束该任务进程"
-                  :disabled="actingTask === t.pid"
-                  @click="onStopTask(t.pid)"
-                >
-                  <XCircle v-if="actingTask !== t.pid" :size="13" />
-                  <span v-else class="h-3 w-3 animate-spin rounded-full border-2 border-alert/40 border-t-alert" />
-                </button>
-              </div>
-            </div>
-          </div>
-          <p
-            v-else
-            class="mt-2 rounded-md border border-dashed border-line px-2 py-2 text-center font-mono text-[11px] text-ink-soft/60 dark:border-coal-line dark:text-chalk-soft/60"
-          >
-            {{ row.status === 'running' ? '正在运行 · 无可见任务进程' : '空闲 · 等待任务' }}
-          </p>
-        </template>
-        <p v-else class="mt-2 rounded-md border border-dashed border-line px-2 py-2 text-center font-mono text-[11px] text-inspect/70 dark:border-coal-line dark:text-inspect-soft/70">
-          已安装 · 未启动 · 设置启动目录后可一键启动
-        </p>
-
-        <!-- 操作 -->
-        <div class="mt-3 flex items-center justify-end gap-2 border-t border-line pt-3 dark:border-coal-line">
-          <template v-if="row.status === 'not-running'">
-            <button class="btn-primary btn-sm" :disabled="actingAgent === row.id" @click="onStartAgent(row)">
-              <Play :size="12" /> 启动
-            </button>
-          </template>
-          <template v-else>
-            <button class="btn-ghost btn-sm" :disabled="actingAgent === row.id" @click="onRestartAgent(row)">
-              <RotateCw :size="12" /> 重启
-            </button>
-            <button class="btn-danger btn-sm" :disabled="actingAgent === row.id" @click="onStopAgent(row)">
-              <Square :size="11" /> 退出
-            </button>
-          </template>
-        </div>
-      </article>
-    </div>
-
-    <!-- 空状态 -->
-    <div v-else class="card grid place-items-center gap-3 border-dashed py-16 text-center">
-      <div class="grid h-12 w-12 place-items-center rounded-full border border-line bg-paper text-ink-soft dark:border-coal-line dark:bg-black/25 dark:text-chalk-soft">
-        <Power :size="20" />
       </div>
-      <div>
-        <p class="font-mono text-sm font-semibold text-ink dark:text-chalk">尚未检测到 AI agent 在本机运行</p>
-        <p class="mt-1 font-mono text-xs text-ink-soft dark:text-chalk-soft">启动或通过 npm 安装 Codex / OpenCode / Claude / Cursor 等工具后会自动出现在这里</p>
+
+      <!-- Agent 卡片列表 -->
+      <template v-if="filteredAgents.length">
+        <template v-if="isGrouped">
+          <section v-for="(group, kind) in groupedAgents" :key="kind" class="space-y-2">
+            <h3
+              class="flex items-center gap-2 font-mono text-[11px] font-bold uppercase tracking-[0.12em] text-ink-soft dark:text-chalk-soft"
+            >
+              <span class="h-1.5 w-1.5 rounded-full bg-signal" /> {{ kind }}
+              <span class="text-ink-soft/50 dark:text-chalk-soft/50">{{ group.length }}</span>
+            </h3>
+            <div class="grid grid-cols-[repeat(auto-fill,minmax(360px,1fr))] gap-3">
+              <article
+                v-for="row in group"
+                :key="row.id"
+                class="card relative flex flex-col overflow-hidden p-4"
+              >
+                <AgentCard :row="row" :expanded="expanded.has(row.id)" @toggle="toggle(row.id)" />
+              </article>
+            </div>
+          </section>
+        </template>
+        <template v-else>
+          <div class="grid grid-cols-[repeat(auto-fill,minmax(360px,1fr))] gap-3">
+            <article
+              v-for="row in filteredAgents"
+              :key="row.id"
+              class="card relative flex flex-col overflow-hidden p-4"
+            >
+              <AgentCard :row="row" :expanded="expanded.has(row.id)" @toggle="toggle(row.id)" />
+            </article>
+          </div>
+        </template>
+      </template>
+
+      <!-- 空状态 -->
+      <div v-else class="card grid place-items-center gap-3 border-dashed py-16 text-center">
+        <div
+          class="grid h-12 w-12 place-items-center rounded-full border border-line bg-paper text-ink-soft dark:border-coal-line dark:bg-black/25 dark:text-chalk-soft"
+        >
+          <Power :size="20" />
+        </div>
+        <div>
+          <p class="font-mono text-sm font-semibold text-ink dark:text-chalk">
+            {{ searchText ? '没有匹配的 agent' : '当前没有 AI agent 正在运行' }}
+          </p>
+          <p class="mt-1 font-mono text-xs text-ink-soft dark:text-chalk-soft">
+            启动 Codex / OpenCode / Claude / Cursor / Windsurf 等 agent 后会自动出现在这里
+          </p>
+        </div>
       </div>
     </div>
   </div>

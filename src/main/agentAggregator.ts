@@ -1,7 +1,72 @@
-import type { AgentRow, AgentTaskProcess } from '../shared/types'
+import type {
+  AgentActivity,
+  AgentHealth,
+  AgentRow,
+  AgentTaskProcess,
+  CustomAgent
+} from '../shared/types'
 import { classifyOrigin } from './portScanner'
 import type { ScanData } from './portScanner'
 import type { InstalledAgent } from './agentDetect'
+
+const ACTIVITY_LABEL: Record<AgentActivity, string> = {
+  test: '运行测试',
+  build: '构建',
+  'dev-server': '开发服务器',
+  install: '安装依赖',
+  script: '运行脚本',
+  shell: '交互式 Shell',
+  git: 'Git 操作',
+  lint: '代码检查',
+  other: '任务'
+}
+
+/** 按命令行启发式识别任务进程的活动类型（边界匹配，避免子串误判） */
+export function classifyActivity(cmdline: string): AgentActivity {
+  const c = cmdline.toLowerCase()
+  const hit = (patterns: RegExp): boolean => patterns.test(c)
+  if (
+    hit(
+      /(^|[\\/.\s])(vitest|jest|mocha|karma|cypress|playwright|pytest|go test|cargo test|phpunit|mvn test|gradle test|npm test|pnpm test|yarn test)([\s.]|$)/
+    )
+  )
+    return 'test'
+  if (
+    hit(
+      /(^|[\\/.\s])(tsc|esbuild|rollup|webpack|vite build|npm run build|pnpm build|yarn build|make|cmake|cargo build|mvn package)([\s.]|$)/
+    )
+  )
+    return 'build'
+  if (
+    hit(
+      /(^|[\\/.\s])(vite|webpack serve|npm run dev|pnpm dev|yarn dev|next dev|nuxt dev|nodemon|node .*server|uvicorn|gunicorn|flask run|django runserver|python .*http\.server)([\s.]|$)/
+    )
+  )
+    return 'dev-server'
+  if (
+    hit(
+      /(^|[\\/.\s])(npm install|pnpm install|yarn install|pip install|pipenv install|poetry install|go get|cargo add|npm ci)([\s.]|$)/
+    )
+  )
+    return 'install'
+  if (hit(/(^|[\\/.\s])(git )(add|commit|push|pull|merge|rebase|checkout|clone|fetch)([\s.]|$)/))
+    return 'git'
+  if (hit(/(^|[\\/.\s])(eslint|prettier|tslint|stylelint|ruff check)([\s.]|$)/)) return 'lint'
+  // 解释器 + 脚本文件 → script
+  if (
+    hit(
+      /(^|[\\/.\s])(python|python3|node|deno|bun|ruby|php|perl|bash|zsh|sh|fish|pwsh|powershell)([\s])([^\s-]+\.(py|js|mjs|cjs|ts|rb|pl|sh|ps1|php))([\s.]|$)/
+    )
+  )
+    return 'script'
+  // 纯交互式 shell（无脚本参数）→ shell
+  if (hit(/(^|[\\/.\s])(bash|zsh|sh|fish|pwsh|powershell|cmd)(\s|$)/)) return 'shell'
+  return 'other'
+}
+
+export function activityLabel(a: AgentActivity): string {
+  return ACTIVITY_LABEL[a]
+}
 
 const SYSTEM_NOISE = new Set([
   'system',
@@ -144,6 +209,7 @@ export function aggregateAgents(
       if (nameBase(p.name) === rootName) continue // 同名 = GUI 内部辅助进程，噪音
       const pPerf = data.perf.get(pid)
       const ports = collectPorts(pid, data)
+      const activity = classifyActivity(p.cmd ?? '')
       tasks.push({
         pid,
         name: p.name,
@@ -151,7 +217,9 @@ export function aggregateAgents(
         cpu: cpuByPid.get(pid) ?? 0,
         memMB: pPerf ? Math.round((pPerf.mem / 1048576) * 10) / 10 : 0,
         ports,
-        createdAt: p.created || Date.now()
+        createdAt: p.created || Date.now(),
+        activity,
+        activityLabel: activityLabel(activity)
       })
     }
 
@@ -171,6 +239,9 @@ export function aggregateAgents(
     }
 
     const status = tasks.length > 0 || ports.length > 0 ? 'running' : 'idle'
+    const lastActiveAt = tasks.length
+      ? Math.max(...tasks.map((t) => t.createdAt))
+      : rootProc.created || Date.now()
     rows.push({
       id: `${kind}:${root}`,
       kind,
@@ -183,7 +254,8 @@ export function aggregateAgents(
       memMB,
       ports: ports.sort((a, b) => a - b),
       taskCount: tasks.length,
-      tasks: tasks.sort((a, b) => b.cpu - a.cpu)
+      tasks: tasks.sort((a, b) => b.cpu - a.cpu),
+      lastActiveAt
     })
   }
 
@@ -204,11 +276,17 @@ function collectPorts(pid: number, data: ScanData): number[] {
 }
 
 /** 将已安装但未运行的 agent 合并进运行中聚合结果 */
-export function mergeInstalledAgents(running: AgentRow[], installed: InstalledAgent[]): AgentRow[] {
+export function mergeInstalledAgents(
+  running: AgentRow[],
+  installed: InstalledAgent[],
+  customs: CustomAgent[] = []
+): AgentRow[] {
   const runningKinds = new Set(running.map((r) => r.kind))
+  const customKinds = new Set(customs.map((c) => c.kind))
   const rows = [...running]
   for (const inst of installed) {
     if (runningKinds.has(inst.kind)) continue
+    const custom = customKinds.has(inst.kind)
     rows.push({
       id: `installed:${inst.kind}`,
       kind: inst.kind,
@@ -219,10 +297,14 @@ export function mergeInstalledAgents(running: AgentRow[], installed: InstalledAg
       memMB: 0,
       ports: [],
       taskCount: 0,
-      tasks: []
+      tasks: [],
+      custom,
+      launchCommand: inst.command
     })
   }
-  const order = (s: AgentRow['status']): number => (s === 'running' ? 0 : s === 'idle' ? 1 : 2)
+  // 统计中把未启动项也排序在末尾
+  const order = (s: AgentRow['status']): number =>
+    s === 'running' ? 0 : s === 'idle' ? 1 : s === 'orphan' ? 2 : 3
   rows.sort((a, b) => order(a.status) - order(b.status) || b.cpu - a.cpu)
   return rows
 }
@@ -239,4 +321,37 @@ function descendants(root: number, children: Map<number, number[]>): number[] {
     for (const c of children.get(cur) ?? []) stack.push(c)
   }
   return out
+}
+
+/**
+ * 评估 agent 健康度（REQ-07）。
+ * - healthy：正常运行且近期有活动或资源消耗。
+ * - suspicious：挂着但长期无任何活动（CPU≈0、无端口、长时间无任务）。
+ * - abnormal：根进程失活但仍留孤儿任务（可能僵死）。
+ */
+export function evaluateHealth(row: AgentRow): AgentHealth {
+  if (row.status === 'orphan') {
+    return {
+      level: 'abnormal',
+      message: '根进程已退出，残留孤儿任务',
+      suggestion: '建议结束残留任务进程，避免资源泄漏'
+    }
+  }
+  const idleMs = row.lastActiveAt ? Date.now() - row.lastActiveAt : 0
+  const suspiciousIdle = idleMs > 10 * 60 * 1000 && row.cpu < 1 && row.taskCount === 0
+  if (suspiciousIdle) {
+    return {
+      level: 'suspicious',
+      message: '长时间无活动（≥10 分钟）',
+      suggestion: '可能空闲挂起，可退出并重新启动该 agent'
+    }
+  }
+  if (row.cpu > 90) {
+    return {
+      level: 'suspicious',
+      message: `CPU 占用偏高（${row.cpu}%）`,
+      suggestion: '检查是否有异常任务在消耗资源'
+    }
+  }
+  return { level: 'healthy', message: '运行正常' }
 }

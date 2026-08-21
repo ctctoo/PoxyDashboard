@@ -95,7 +95,8 @@ function createWindow(): void {
 
 async function runSmoke(): Promise<void> {
   const delay = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
-  const js = (code: string): Promise<unknown> => mainWindow?.webContents.executeJavaScript(code) ?? Promise.resolve(null)
+  const js = (code: string): Promise<unknown> =>
+    mainWindow?.webContents.executeJavaScript(code) ?? Promise.resolve(null)
   const dump = async (label: string): Promise<void> => {
     const txt = (await js(`document.body.innerText`)) as string
     console.log(`[smoke:${label}]`, txt.replace(/\n+/g, ' | ').slice(0, 480))
@@ -114,7 +115,11 @@ async function runSmoke(): Promise<void> {
     }
     return false
   }
-  const waitNoText = async (selector: string, text: string, timeoutMs: number): Promise<boolean> => {
+  const waitNoText = async (
+    selector: string,
+    text: string,
+    timeoutMs: number
+  ): Promise<boolean> => {
     const start = Date.now()
     while (Date.now() - start < timeoutMs) {
       const t = (await js(selector)) as string
@@ -137,15 +142,21 @@ async function runSmoke(): Promise<void> {
     await dump('settings')
     await clickNav('启动台')
     await delay(400)
-    await js(`(() => { const b = document.querySelector('article .btn-primary'); if (b) { b.click(); return 'clicked' } return 'no-card' })()`)
+    await js(
+      `(() => { const b = document.querySelector('article .btn-primary'); if (b) { b.click(); return 'clicked' } return 'no-card' })()`
+    )
     const runningOk = await waitText(`document.body.innerText`, ':8799', 20000)
     console.log('[smoke:service-running]', runningOk ? 'ok' : 'TIMEOUT')
     await dump('after-start')
-    await js(`(() => { const b = document.querySelector('article .btn-danger'); if (b) { b.click(); return 'clicked' } return 'no-stop' })()`)
+    await js(
+      `(() => { const b = document.querySelector('article .btn-danger'); if (b) { b.click(); return 'clicked' } return 'no-stop' })()`
+    )
     const stoppedOk = await waitNoText(`document.body.innerText`, ':8799', 15000)
     console.log('[smoke:service-stopped]', stoppedOk ? 'ok' : 'TIMEOUT')
     await dump('after-stop')
-    await js(`(() => { const b = document.querySelectorAll('article')[1]?.querySelector('.btn-primary'); if (b) { b.click(); return 'clicked' } return 'no-task-card' })()`)
+    await js(
+      `(() => { const b = document.querySelectorAll('article')[1]?.querySelector('.btn-primary'); if (b) { b.click(); return 'clicked' } return 'no-task-card' })()`
+    )
     await delay(9000)
     await clickNav('日志中心')
     await delay(800)
@@ -194,7 +205,10 @@ async function runSmoke(): Promise<void> {
     const alertGone = await waitNoText(`document.body.innerText`, '发现新端口', 8000)
     const bodyAfter = (await js(`document.body.innerText`)) as string
     const persisted = readFileSync(getConfigPath(), 'utf8').includes('8797')
-    console.log('[smoke:port-ignored]', alertGone && !bodyAfter.includes('已隐藏的服务') && persisted ? 'ok' : 'FAIL')
+    console.log(
+      '[smoke:port-ignored]',
+      alertGone && !bodyAfter.includes('已隐藏的服务') && persisted ? 'ok' : 'FAIL'
+    )
     const img = await mainWindow?.webContents.capturePage()
     if (img) writeFileSync(process.env['DASH_SMOKE'] as string, img.toPNG())
   } catch (err) {
@@ -214,7 +228,9 @@ function showMainWindow(): void {
   mainWindow.focus()
 }
 
-function navigate(view: 'launchpad' | 'monitor' | 'dbs' | 'docker' | 'agents' | 'logs' | 'settings'): void {
+function navigate(
+  view: 'launchpad' | 'monitor' | 'dbs' | 'docker' | 'agents' | 'logs' | 'settings'
+): void {
   showMainWindow()
   send('nav', view)
 }
@@ -275,7 +291,14 @@ if (!gotLock) {
         )
         return
       }
-      res.end(JSON.stringify({ name: '总控台', version: app.getVersion(), uptimeMs: process.uptime() * 1000, ts: Date.now() }))
+      res.end(
+        JSON.stringify({
+          name: '总控台',
+          version: app.getVersion(),
+          uptimeMs: process.uptime() * 1000,
+          ts: Date.now()
+        })
+      )
     })
     const appInfo: AppInfo = {
       version: app.getVersion(),

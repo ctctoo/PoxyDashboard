@@ -2,8 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { classifyOrigin } from '../src/main/portScanner'
 import type { ScanData } from '../src/main/portScanner'
 
-function makeProcs(map: Record<number, { name: string; cmd: string; ppid: number }>): Map<number, { pid: number; ppid: number; name: string; cmd: string; created: number }> {
-  const m = new Map<number, { pid: number; ppid: number; name: string; cmd: string; created: number }>()
+function makeProcs(
+  map: Record<number, { name: string; cmd: string; ppid: number }>
+): Map<number, { pid: number; ppid: number; name: string; cmd: string; created: number }> {
+  const m = new Map<
+    number,
+    { pid: number; ppid: number; name: string; cmd: string; created: number }
+  >()
   for (const [pid, p] of Object.entries(map)) {
     m.set(Number(pid), { pid: Number(pid), ppid: p.ppid, name: p.name, cmd: p.cmd, created: 1 })
   }
@@ -24,7 +29,11 @@ describe('classifyOrigin AI 判定', () => {
   it('Edge 进程不会被误判为 AI agent', () => {
     const origin = classify(
       {
-        10: { name: 'msedge.exe', cmd: '"C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe" --type=renderer --user-data-dir=C:\\Users\\me\\AppData\\Local\\Microsoft\\Edge\\User Data', ppid: 1 }
+        10: {
+          name: 'msedge.exe',
+          cmd: '"C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe" --type=renderer --user-data-dir=C:\\Users\\me\\AppData\\Local\\Microsoft\\Edge\\User Data',
+          ppid: 1
+        }
       },
       10
     )
@@ -35,7 +44,11 @@ describe('classifyOrigin AI 判定', () => {
     // 路径/参数里恰好含 "codex" 字样的普通进程，不应被判为 ai
     const origin = classify(
       {
-        20: { name: 'node.exe', cmd: 'node C:\\codex-tools\\helper.js --config=mycodex.json', ppid: 1 }
+        20: {
+          name: 'node.exe',
+          cmd: 'node C:\\codex-tools\\helper.js --config=mycodex.json',
+          ppid: 1
+        }
       },
       20
     )
@@ -62,5 +75,35 @@ describe('classifyOrigin AI 判定', () => {
     )
     expect(origin?.kind).toBe('ai')
     expect(origin?.label).toBe('Codex')
+  })
+
+  it('识别 Cursor 桌面应用为 AI agent（不再归为 editor）', () => {
+    const origin = classify(
+      {
+        50: {
+          name: 'Cursor.exe',
+          cmd: '"C:\\Users\\me\\AppData\\Local\\Programs\\cursor\\Cursor.exe"',
+          ppid: 1
+        }
+      },
+      50
+    )
+    expect(origin?.kind).toBe('ai')
+    expect(origin?.label).toBe('Cursor')
+  })
+
+  it('识别 Windsurf 桌面应用为 AI agent', () => {
+    const origin = classify(
+      {
+        60: {
+          name: 'Windsurf.exe',
+          cmd: '"C:\\Users\\me\\AppData\\Local\\Programs\\Windsurf\\Windsurf.exe"',
+          ppid: 1
+        }
+      },
+      60
+    )
+    expect(origin?.kind).toBe('ai')
+    expect(origin?.label).toBe('Windsurf')
   })
 })

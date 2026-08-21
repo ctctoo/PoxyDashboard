@@ -47,13 +47,22 @@ export function hasShellSyntax(cmd: string): boolean {
   return /[|><&]/.test(outside)
 }
 
-export function spawnCommandLine(raw: string, opts: { cwd?: string; detached?: boolean }): ChildProcessWithoutNullStreams {
+export function spawnCommandLine(
+  raw: string,
+  opts: { cwd?: string; detached?: boolean }
+): ChildProcessWithoutNullStreams {
   const parsed = parseCommand(raw)
-  const base: { cwd?: string; windowsHide: boolean; detached?: boolean } = { cwd: opts.cwd, windowsHide: true }
+  const base: { cwd?: string; windowsHide: boolean; detached?: boolean } = {
+    cwd: opts.cwd,
+    windowsHide: true
+  }
   if (opts.detached) base.detached = true
   if (parsed.shell || hasShellSyntax(raw)) {
     if (process.platform === 'win32') {
-      return spawn('cmd.exe', ['/d', '/s', '/c', raw], { ...base, env: process.env }) as unknown as ChildProcessWithoutNullStreams
+      return spawn('cmd.exe', ['/d', '/s', '/c', raw], {
+        ...base,
+        env: process.env
+      }) as unknown as ChildProcessWithoutNullStreams
     }
     return spawn('/bin/sh', ['-c', raw], { ...base }) as unknown as ChildProcessWithoutNullStreams
   }
@@ -61,9 +70,15 @@ export function spawnCommandLine(raw: string, opts: { cwd?: string; detached?: b
   const exe = resolved ?? parsed.exe
   const lower = exe.toLowerCase()
   if (lower.endsWith('.cmd') || lower.endsWith('.bat') || lower.endsWith('.ps1')) {
-    return crossSpawn(exe, parsed.args, { ...base, env: process.env }) as unknown as ChildProcessWithoutNullStreams
+    return crossSpawn(exe, parsed.args, {
+      ...base,
+      env: process.env
+    }) as unknown as ChildProcessWithoutNullStreams
   }
-  return spawn(exe, parsed.args, { ...base, env: process.env }) as unknown as ChildProcessWithoutNullStreams
+  return spawn(exe, parsed.args, {
+    ...base,
+    env: process.env
+  }) as unknown as ChildProcessWithoutNullStreams
 }
 
 const exeCache = new Map<string, string | null>()
@@ -105,7 +120,11 @@ export function pickExecutablePath(lines: string[]): string | null {
 function whichPath(exe: string): string | null {
   try {
     if (process.platform === 'win32') {
-      const out = execFileSync('where.exe', [exe], { stdio: ['ignore', 'pipe', 'ignore'], encoding: 'utf8', windowsHide: true })
+      const out = execFileSync('where.exe', [exe], {
+        stdio: ['ignore', 'pipe', 'ignore'],
+        encoding: 'utf8',
+        windowsHide: true
+      })
       return pickExecutablePath(out.split(/\r?\n/))
     }
     execFileSync('which', [exe], { stdio: 'ignore' })
@@ -117,20 +136,34 @@ function whichPath(exe: string): string | null {
 
 function knownRoots(): string[] {
   if (process.platform === 'win32') {
-    return [
+    const localAppData = process.env['LOCALAPPDATA'] ?? ''
+    const appData = process.env['APPDATA'] ?? ''
+    const userProfile = process.env['USERPROFILE'] ?? ''
+    const roots = [
       'C:\\Program Files\\MongoDB\\Server',
       'C:\\Program Files (x86)\\MongoDB\\Server',
-      join(process.env['LOCALAPPDATA'] ?? '', 'Programs', 'MongoDB', 'Server'),
-      join(process.env['USERPROFILE'] ?? '', 'scoop', 'apps', 'mongodb'),
-      'C:\\ProgramData\\chocolatey\\bin'
+      join(localAppData, 'Programs', 'MongoDB', 'Server'),
+      join(userProfile, 'scoop', 'apps', 'mongodb'),
+      'C:\\ProgramData\\chocolatey\\bin',
+      // 用户级桌面应用（Cursor / Windsurf / ChatGPT / Claude Desktop / VS Code 等）
+      join(localAppData, 'Programs'),
+      // npm 全局 bin（pnpm / yarn 全局安装的 CLI agent）
+      join(appData, 'npm'),
+      // Codex / Claude Code 官方安装器默认位置
+      join(userProfile, '.codex', 'bin'),
+      join(userProfile, '.local', 'bin')
     ]
+    return roots
   }
+  const home = process.env['HOME'] ?? ''
   return [
     '/usr/local/opt/mongodb-community/bin',
     '/usr/local/opt/mongodb/bin',
     '/opt/homebrew/opt/mongodb-community/bin',
     '/opt/homebrew/bin',
-    '/usr/local/bin'
+    '/usr/local/bin',
+    join(home, '.codex', 'bin'),
+    join(home, '.local', 'bin')
   ]
 }
 
@@ -166,7 +199,10 @@ function searchKnownRoots(exe: string): string | null {
 export function killTree(pid: number): Promise<void> {
   return new Promise((resolve) => {
     if (process.platform === 'win32') {
-      const p = spawn('taskkill', ['/PID', String(pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' })
+      const p = spawn('taskkill', ['/PID', String(pid), '/T', '/F'], {
+        windowsHide: true,
+        stdio: 'ignore'
+      })
       p.on('close', () => resolve())
       p.on('error', () => resolve())
     } else {

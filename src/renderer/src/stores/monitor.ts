@@ -1,8 +1,17 @@
 import { computed, ref } from 'vue'
 import { api } from '../lib/api'
-import type { ContainerRow, DbRow, HiddenPortEntry, MonitorSnapshot, PortAlert, ProcessInfo } from '@shared/types'
+import type {
+  ContainerRow,
+  DbRow,
+  HiddenPortEntry,
+  MonitorSnapshot,
+  PortAlert,
+  ProcessInfo
+} from '@shared/types'
 
 export const snapshot = ref<MonitorSnapshot | null>(null)
+/** 监控数据是否已就绪（首次快照到达） */
+export const monitorReady = computed(() => snapshot.value !== null)
 export const alerts = ref<PortAlert[]>([])
 export const dbs = ref<DbRow[]>([])
 export const containers = ref<ContainerRow[]>([])
@@ -62,7 +71,10 @@ export const focused = computed<ProcessInfo[]>(() => {
   if (!q) return []
   const all = [...(snapshot.value?.services ?? []), ...(snapshot.value?.background ?? [])]
   return all.filter(
-    (p) => p.name.toLowerCase().includes(q) || p.cmdline.toLowerCase().includes(q) || (p.dir ?? '').toLowerCase().includes(q)
+    (p) =>
+      p.name.toLowerCase().includes(q) ||
+      p.cmdline.toLowerCase().includes(q) ||
+      (p.dir ?? '').toLowerCase().includes(q)
   )
 })
 

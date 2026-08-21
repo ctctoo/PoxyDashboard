@@ -5,10 +5,17 @@ import type { AppConfig, AppEntry, AppRuntime, NewAppInput, ValidationResult } f
 export const configs = ref<AppConfig[]>([])
 export const runtimes = reactive(new Map<string, AppRuntime>())
 export const validity = reactive(new Map<string, ValidationResult>())
+/** 启动台应用列表是否已加载完成 */
+export const appsReady = ref(false)
 
 function defaultOf(c: AppConfig): AppRuntime {
   return c.claimed
-    ? { status: 'running', pid: c.claimed.pid, port: c.claimed.port, startedAt: c.claimed.startedAt }
+    ? {
+        status: 'running',
+        pid: c.claimed.pid,
+        port: c.claimed.port,
+        startedAt: c.claimed.startedAt
+      }
     : { status: 'stopped' }
 }
 
@@ -27,6 +34,7 @@ export async function initApps(): Promise<void> {
     })
   ]
   await reload()
+  appsReady.value = true
 }
 
 export async function reload(): Promise<void> {
@@ -43,6 +51,7 @@ export async function reload(): Promise<void> {
   for (const c of cfgs) {
     validity.set(c.id, await api.validateApp(c.id))
   }
+  appsReady.value = true
 }
 
 export async function addApp(input: NewAppInput): Promise<void> {

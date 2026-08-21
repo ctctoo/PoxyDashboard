@@ -35,9 +35,10 @@ const sectionEntries = computed(() => appEntries.value.filter((e) => e.kind === 
 const visible = computed(() => sectionEntries.value.filter((e) => matches(e, filter.value)))
 
 const dragList = ref<AppEntry[]>([])
+// 首次挂载（beforeMount）时也要同步，否则首次渲染 dragList 仍为空，需点击筛选才显示
 watch(visible, (v) => {
   dragList.value = [...v]
-})
+}, { immediate: true })
 
 const sort = ref({ active: false, ids: [] as string[], cursor: 0 })
 

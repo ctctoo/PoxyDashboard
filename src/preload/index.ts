@@ -47,19 +47,13 @@ const api: Api = {
   addFocusKeyword: (kw) => ipcRenderer.invoke('monitor:focusAdd', kw),
   removeFocusKeyword: (kw) => ipcRenderer.invoke('monitor:focusRemove', kw),
 
-  stopAgentTask: (pid) => ipcRenderer.invoke('agents:stopTask', pid),
-  stopAgent: (pid) => ipcRenderer.invoke('agents:stopAgent', pid),
-  startAgent: (kind, dir) => ipcRenderer.invoke('agents:startAgent', kind, dir),
-  restartAgent: (kind, dir) => ipcRenderer.invoke('agents:restartAgent', kind, dir),
-  getAgentLaunchDir: (kind) => ipcRenderer.invoke('agents:getLaunchDir', kind),
-  setAgentLaunchDir: (kind, dir) => ipcRenderer.invoke('agents:setLaunchDir', kind, dir),
-
   openUrl: (url) => ipcRenderer.invoke('shell:openUrl', url),
   openPath: (p) => ipcRenderer.invoke('shell:openPath', p),
   getAppInfo: () => ipcRenderer.invoke('app:info'),
 
   on: (channel, cb) => {
-    const listener = (_e: IpcRendererEvent, payload: unknown): void => (cb as (p: unknown) => void)(payload)
+    const listener = (_e: IpcRendererEvent, payload: unknown): void =>
+      (cb as (p: unknown) => void)(payload)
     ipcRenderer.on(channel, listener)
     return () => {
       ipcRenderer.removeListener(channel, listener)

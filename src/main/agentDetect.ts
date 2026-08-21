@@ -3,7 +3,8 @@ import { existsSync } from 'fs'
 import { join } from 'path'
 import { promisify } from 'util'
 import { findExecutable } from './commands'
-import { AGENT_CATALOG } from './agentLauncher'
+import { AGENT_CATALOG, AGENT_LABEL } from './agentLauncher'
+import type { CustomAgent } from '../shared/types'
 
 const execFileAsync = promisify(execFile)
 
@@ -15,36 +16,36 @@ export interface InstalledAgent {
   command: string
 }
 
-const AGENT_LABEL: Record<string, string> = {
-  codex: 'Codex',
-  opencode: 'OpenCode',
-  claude: 'Claude',
-  kimi: 'Kimi',
-  chatgpt: 'ChatGPT',
-  gemini: 'Gemini',
-  windsurf: 'Windsurf',
-  cursor: 'Cursor',
-  cline: 'Cline'
-}
-
 /**
  * 探测本机已安装的 AI agent（即使尚未运行也能识别）。
  * 来源：
  *  1) PATH / 常见安装目录（findExecutable）
  *  2) npm 全局 bin（npm prefix -g → node_modules/.bin，覆盖 npm 全局安装的 CLI agent）
+ *  3) 用户自定义 agent（按其命令探测）
  */
-export async function detectInstalledAgents(): Promise<InstalledAgent[]> {
+export async function detectInstalledAgents(
+  customs: CustomAgent[] = []
+): Promise<InstalledAgent[]> {
   const installed: InstalledAgent[] = []
   const seen = new Set<string>()
 
   const npmBinDir = await findNpmGlobalBin()
 
+  const catalog: Array<{ kind: string; cmd: string; label: string }> = []
   for (const [kind, cmd] of Object.entries(AGENT_CATALOG)) {
-    if (!cmd) continue
+    if (cmd) catalog.push({ kind, cmd, label: AGENT_LABEL[kind] ?? kind })
+  }
+  for (const c of customs) {
+    if (!c.command.trim()) continue
+    catalog.push({ kind: c.kind, cmd: c.command.trim(), label: c.label || c.kind })
+  }
+
+  for (const { kind, cmd, label } of catalog) {
+    if (seen.has(kind)) continue
     // 1) PATH 命中
     const exe = findExecutable(cmd)
     if (exe) {
-      installed.push({ kind, label: AGENT_LABEL[kind] ?? kind, command: cmd })
+      installed.push({ kind, label, command: cmd })
       seen.add(kind)
       continue
     }
@@ -53,7 +54,7 @@ export async function detectInstalledAgents(): Promise<InstalledAgent[]> {
       const shimNames = [`${cmd}.cmd`, `${cmd}.ps1`, `${cmd}.exe`, cmd]
       const hit = shimNames.find((n) => existsSync(join(npmBinDir, n)))
       if (hit) {
-        installed.push({ kind, label: AGENT_LABEL[kind] ?? kind, command: cmd })
+        installed.push({ kind, label, command: cmd })
         seen.add(kind)
       }
     }

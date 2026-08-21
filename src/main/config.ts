@@ -2,7 +2,7 @@ import { app } from 'electron'
 import { readFileSync } from 'fs'
 import { promises as fs, existsSync, mkdirSync } from 'fs'
 import { join } from 'path'
-import type { AppConfig, ConfigFile, HiddenPortEntry, Settings } from '../shared/types'
+import type { AppConfig, ConfigFile, CustomAgent, HiddenPortEntry, Settings } from '../shared/types'
 import type { LoggerService } from './logger'
 
 export function getDataDir(): string {
@@ -24,8 +24,13 @@ function defaults(): ConfigFile {
     focusKeywords: [],
     hiddenPorts: [],
     ignoredPorts: [],
-    settings: { notifyTaskComplete: true, theme: 'auto', launchpadView: 'grid' },
-    agentDirs: {}
+    settings: {
+      notifyTaskComplete: true,
+      theme: 'auto',
+      launchpadView: 'grid'
+    },
+    agentDirs: {},
+    customAgents: []
   }
 }
 
@@ -50,7 +55,8 @@ export class ConfigStore {
           focusKeywords: Array.isArray(raw.focusKeywords) ? raw.focusKeywords : [],
           hiddenPorts: Array.isArray(raw.hiddenPorts) ? raw.hiddenPorts : [],
           ignoredPorts: Array.isArray(raw.ignoredPorts) ? raw.ignoredPorts : [],
-          agentDirs: raw.agentDirs && typeof raw.agentDirs === 'object' ? raw.agentDirs : {}
+          agentDirs: raw.agentDirs && typeof raw.agentDirs === 'object' ? raw.agentDirs : {},
+          customAgents: Array.isArray(raw.customAgents) ? raw.customAgents : []
         }
         this.logger?.business(`加载配置成功（${this.cfg.apps.length} 个应用）`)
       }
@@ -172,5 +178,22 @@ export class ConfigStore {
     else delete this.cfg.agentDirs[kind]
     this.save()
     return this.cfg.agentDirs[kind]
+  }
+
+  getCustomAgents(): CustomAgent[] {
+    return this.cfg.customAgents
+  }
+
+  addCustomAgent(agent: CustomAgent): CustomAgent {
+    this.cfg.customAgents = this.cfg.customAgents.filter((a) => a.kind !== agent.kind)
+    this.cfg.customAgents.push(agent)
+    this.save()
+    return agent
+  }
+
+  removeCustomAgent(kind: string): void {
+    this.cfg.customAgents = this.cfg.customAgents.filter((a) => a.kind !== kind)
+    delete this.cfg.agentDirs[kind]
+    this.save()
   }
 }

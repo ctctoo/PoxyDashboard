@@ -1,6 +1,14 @@
 import { EventEmitter } from 'events'
 import { cpus } from 'os'
-import type { AppRuntime, ContainerRow, DbRow, MonitorSnapshot, PortAlert, ProcessInfo } from '../shared/types'
+import type {
+  AgentRow,
+  AppRuntime,
+  ContainerRow,
+  DbRow,
+  MonitorSnapshot,
+  PortAlert,
+  ProcessInfo
+} from '../shared/types'
 import { killTree, spawnCommandLine } from './commands'
 import { identifyDb } from './dbDetect'
 import { parseDockerPortMap, parseDockerPorts, scanDocker } from './dockerScan'
@@ -10,9 +18,7 @@ import { buildOwnTree, classifyOrigin, scanPorts } from './portScanner'
 import type { ScanData } from './portScanner'
 import type { ConfigStore } from './config'
 import type { ProcessManager } from './processManager'
-import { aggregateAgents, mergeInstalledAgents } from './agentAggregator'
-import type { InstalledAgent } from './agentDetect'
-import { detectInstalledAgents } from './agentDetect'
+import { aggregateAgents, evaluateHealth } from './agentAggregator'
 
 const SCAN_INTERVAL = 5000
 /** Docker 扫描间隔：每 3 个端口扫描周期执行一次（约 15s） */
@@ -62,8 +68,10 @@ export class MonitorService extends EventEmitter {
   /** 会话内容器表（含已停止的记录，支持重新启动） */
   private containerRows = new Map<string, ContainerRow>()
   private scanCount = 0
-  /** 已安装但未运行的 AI agent（启动时探测一次） */
-  private installedAgents: InstalledAgent[] = []
+  /** 会话内 agent 累计运行时长（ms）：kind → 累计 */
+  private agentRunTotal = new Map<string, number>()
+  /** 每轮记录各 agent 是否在运行，用于累计 */
+  private agentLastSeen = new Map<string, number>()
 
   constructor(
     private cfg: ConfigStore,
@@ -75,16 +83,6 @@ export class MonitorService extends EventEmitter {
   start(): void {
     void this.tick()
     this.timer = setInterval(() => void this.tick(), SCAN_INTERVAL)
-    void this.refreshInstalledAgents()
-  }
-
-  /** 重新探测已安装的 AI agent（不阻塞主流程） */
-  private async refreshInstalledAgents(): Promise<void> {
-    try {
-      this.installedAgents = await detectInstalledAgents()
-    } catch {
-      this.installedAgents = []
-    }
   }
 
   stop(): void {
@@ -99,7 +97,10 @@ export class MonitorService extends EventEmitter {
   private ack(port: number): void {
     this.dismissedPorts.add(port)
     this.knownPorts.add(port)
-    this.emit('alerts-changed', this.pendingAlerts().filter((a) => a.port !== port))
+    this.emit(
+      'alerts-changed',
+      this.pendingAlerts().filter((a) => a.port !== port)
+    )
   }
 
   dismiss(port: number): void {
@@ -120,7 +121,9 @@ export class MonitorService extends EventEmitter {
 
   private lastAlerts: PortAlert[] = []
 
-  findPortProcess(port: number): { pid: number; name: string; cmdline: string; dir?: string } | null {
+  findPortProcess(
+    port: number
+  ): { pid: number; name: string; cmdline: string; dir?: string } | null {
     const s = this.lastScan
     if (!s) return null
     const conn = s.conns.find((c) => c.port === port)
@@ -365,7 +368,11 @@ export class MonitorService extends EventEmitter {
     this.emit('snapshot', snapshot)
   }
 
-  private buildSnapshot(data: ScanData, ownTree: Set<number>, children: Map<number, number[]>): MonitorSnapshot {
+  private buildSnapshot(
+    data: ScanData,
+    ownTree: Set<number>,
+    children: Map<number, number[]>
+  ): MonitorSnapshot {
     const now = Date.now()
     const cpuByPid = new Map<number, number>()
     for (const [pid, perf] of data.perf) {
@@ -373,7 +380,7 @@ export class MonitorService extends EventEmitter {
       if (prev) {
         const dt = Math.max((now - prev.ts) / 1000, 0.001)
         const delta = Math.max(perf.cpu - prev.cpu, 0)
-        cpuByPid.set(pid, Math.min(99, Math.round(((delta / dt) * 100) * 10) / 10))
+        cpuByPid.set(pid, Math.min(99, Math.round((delta / dt) * 100 * 10) / 10))
       }
       this.prevPerf.set(pid, { cpu: perf.cpu, ts: now })
     }
@@ -410,7 +417,12 @@ export class MonitorService extends EventEmitter {
         ports,
         origin: classifyOrigin(pid, data.procs, ownTree),
         claimedBy,
-        db: identifyDb({ name: p.name, cmdline: p.cmd ?? '', binaryPath: perf?.path, port: ports.length ? Math.min(...ports) : undefined })
+        db: identifyDb({
+          name: p.name,
+          cmdline: p.cmd ?? '',
+          binaryPath: perf?.path,
+          port: ports.length ? Math.min(...ports) : undefined
+        })
       }
       if (ports.length) {
         if (!visiblePorts.length) continue
@@ -443,7 +455,7 @@ export class MonitorService extends EventEmitter {
       for (const v of cpuByPid.values()) totalCpu += v
     }
     const dbs = this.syncDbRows(services, data)
-    const agents = mergeInstalledAgents(aggregateAgents(data, ownTree, cpuByPid, children), this.installedAgents)
+    const agents = this.buildAgentRows(data, ownTree, cpuByPid, children, now)
     return {
       ts: data.ts,
       services,
@@ -459,6 +471,44 @@ export class MonitorService extends EventEmitter {
         memCapacityMB: Math.round((memCapacity / 1048576) * 10) / 10,
         cores: cpus().length
       }
+    }
+  }
+
+  /**
+   * 构建 agent 行：只返回当前正在运行的 agent（应用本体 + 派生任务），并附加健康度与累计运行时长。
+   * 已按要求去除：未安装 agent 探测合并、孤儿态、控制相关逻辑。
+   */
+  private buildAgentRows(
+    data: ScanData,
+    ownTree: Set<number>,
+    cpuByPid: Map<number, number>,
+    children: Map<number, number[]>,
+    now: number
+  ): AgentRow[] {
+    const rows = aggregateAgents(data, ownTree, cpuByPid, children)
+    // REQ-07 健康度
+    for (const row of rows) {
+      row.health = evaluateHealth(row)
+    }
+    // REQ-14 累计运行时长
+    this.accumulateRunTime(rows, now)
+    return rows
+  }
+
+  /** 累计各 agent 会话内运行时长（REQ-14）：按 kind 聚合，按扫描间隔累加 */
+  private accumulateRunTime(rows: AgentRow[], now: number): void {
+    for (const row of rows) {
+      if (row.status === 'not-running') {
+        this.agentLastSeen.delete(row.kind)
+        continue
+      }
+      const prev = this.agentLastSeen.get(row.kind)
+      if (prev !== undefined) {
+        const delta = Math.max(0, now - prev)
+        this.agentRunTotal.set(row.kind, (this.agentRunTotal.get(row.kind) ?? 0) + delta)
+      }
+      this.agentLastSeen.set(row.kind, now)
+      row.totalRunMs = this.agentRunTotal.get(row.kind) ?? 0
     }
   }
 
@@ -502,8 +552,10 @@ export class MonitorService extends EventEmitter {
       for (const r of sorted.slice(0, this.dbRows.size - 80)) this.dbRows.delete(r.id)
     }
     return [...this.dbRows.values()].sort((a, b) => {
-      const sa = a.status === 'running' || a.status === 'starting' || a.status === 'stopping' ? 0 : 1
-      const sb = b.status === 'running' || b.status === 'starting' || b.status === 'stopping' ? 0 : 1
+      const sa =
+        a.status === 'running' || a.status === 'starting' || a.status === 'stopping' ? 0 : 1
+      const sb =
+        b.status === 'running' || b.status === 'starting' || b.status === 'stopping' ? 0 : 1
       return sa - sb || (a.port ?? 0) - (b.port ?? 0)
     })
   }
@@ -534,7 +586,11 @@ export class MonitorService extends EventEmitter {
         }
         this.pm.applyExternalTick(app.id, runtime)
       } else {
-        const runtime: AppRuntime = { status: 'stopped', error: '外部进程已退出', lastActiveAt: Date.now() }
+        const runtime: AppRuntime = {
+          status: 'stopped',
+          error: '外部进程已退出',
+          lastActiveAt: Date.now()
+        }
         this.pm.applyExternalTick(app.id, runtime)
         this.emit('claimed-expired', app.id)
       }

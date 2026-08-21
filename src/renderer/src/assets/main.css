@@ -8,8 +8,11 @@
 /* ------------------------------------------------------------------ */
 @theme {
   /* 字体 */
-  --font-sans: 'Inter', 'Segoe UI Variable', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Cascadia Code', 'Cascadia Mono', Consolas, 'SF Mono', ui-monospace, monospace;
+  --font-sans:
+    'Inter', 'Segoe UI Variable', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', system-ui,
+    sans-serif;
+  --font-mono:
+    'JetBrains Mono', 'Cascadia Code', 'Cascadia Mono', Consolas, 'SF Mono', ui-monospace, monospace;
 
   /* 表面（浅色） */
   --color-paper: #f3efe7;
@@ -94,11 +97,15 @@ textarea {
   /* 主操作：信号橙「电源」 */
   .btn-primary {
     @apply inline-flex items-center justify-center gap-1.5 rounded-[7px] bg-signal px-3 py-1.5 text-sm font-semibold text-white transition-all duration-150 hover:bg-[#c4421f] active:translate-y-px disabled:pointer-events-none disabled:opacity-40 disabled:hover:bg-signal;
-    box-shadow: 0 1px 0 rgb(0 0 0 / 0.25), inset 0 1px 0 rgb(255 255 255 / 0.18);
+    box-shadow:
+      0 1px 0 rgb(0 0 0 / 0.25),
+      inset 0 1px 0 rgb(255 255 255 / 0.18);
   }
   .btn-danger {
     @apply inline-flex items-center justify-center gap-1.5 rounded-[7px] bg-alert px-3 py-1.5 text-sm font-semibold text-white transition-all duration-150 hover:bg-[#b53224] active:translate-y-px disabled:pointer-events-none disabled:opacity-40 disabled:hover:bg-alert;
-    box-shadow: 0 1px 0 rgb(0 0 0 / 0.22), inset 0 1px 0 rgb(255 255 255 / 0.18);
+    box-shadow:
+      0 1px 0 rgb(0 0 0 / 0.22),
+      inset 0 1px 0 rgb(255 255 255 / 0.18);
   }
   .btn-ghost {
     @apply inline-flex items-center justify-center gap-1.5 rounded-[7px] border border-line bg-transparent px-3 py-1.5 text-sm font-medium text-ink-soft transition-colors duration-150 hover:border-signal/60 hover:text-ink disabled:pointer-events-none disabled:opacity-40 dark:border-coal-line dark:text-chalk-soft dark:hover:border-signal/60 dark:hover:text-chalk;
@@ -196,6 +203,22 @@ textarea {
 }
 .boot-leave-to {
   opacity: 0;
+}
+
+/* 视图切换过渡 */
+.view-enter-active,
+.view-leave-active {
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease;
+}
+.view-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
+}
+.view-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
 }
 
 .row-move,

@@ -61,13 +61,6 @@ export interface Api {
   addFocusKeyword(kw: string): Promise<void>
   removeFocusKeyword(kw: string): Promise<void>
 
-  stopAgentTask(pid: number): Promise<{ ok: boolean; reason?: string }>
-  stopAgent(pid: number): Promise<{ ok: boolean; reason?: string }>
-  startAgent(kind: string, dir?: string): Promise<{ ok: boolean; reason?: string }>
-  restartAgent(kind: string, dir?: string): Promise<{ ok: boolean; reason?: string }>
-  getAgentLaunchDir(kind: string): Promise<string | null>
-  setAgentLaunchDir(kind: string, dir: string): Promise<string | undefined>
-
   openUrl(url: string): Promise<void>
   openPath(p: string): Promise<void>
   getAppInfo(): Promise<AppInfo>

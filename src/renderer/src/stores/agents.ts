@@ -1,62 +1,78 @@
 import { computed, ref } from 'vue'
-import { api } from '../lib/api'
 import type { AgentRow } from '@shared/types'
 import { snapshot } from './monitor'
-import { confirmDialog } from './confirm'
 import { formatMem } from '../lib/fmt'
 
-/** 从 monitor snapshot 派生 AI agent 聚合数据（运行中 + 已安装未启动） */
+/**
+ * 运行中的 AI agent 列表（直接来自 monitor snapshot，主进程已只聚合运行中进程）。
+ * 本模块仅负责「展示」：无任何启动/停止/重启等控制能力。
+ */
 export const agents = computed<AgentRow[]>(() => snapshot.value?.agents ?? [])
 
-/** 每个 agent（按 kind）已配置的启动工作目录 */
-export const launchDirs = ref<Record<string, string>>({})
-
-let unsubs: Array<() => void> = []
-
+/** 初始化占位：agent 数据完全来自 monitor snapshot，无需额外加载（保留以兼容 App 启动流程） */
 export async function initAgents(): Promise<void> {
-  unsubs.forEach((f) => f())
-  unsubs = [
-    api.on('apps:changed', () => {
-      void refreshLaunchDirs()
-    })
-  ]
-  await refreshLaunchDirs()
+  /* no-op */
 }
 
-async function refreshLaunchDirs(): Promise<void> {
-  const cfg = await api.getConfig()
-  launchDirs.value = cfg.agentDirs ?? {}
+// ---- 排序 / 分组 / 筛选（纯展示） ----
+export type AgentSortKey = 'cpu' | 'mem' | 'lastActive' | 'taskCount'
+export const sortKey = ref<AgentSortKey>('cpu')
+export const searchText = ref('')
+export const groupByKind = ref(false)
+
+function statusOrder(s: AgentRow['status']): number {
+  return s === 'running' ? 0 : s === 'idle' ? 1 : 2
 }
 
-/** 某 agent 已配置的启动目录（未配置返回 null） */
-export function getLaunchDir(kind: string): string | null {
-  return launchDirs.value[kind] ?? null
-}
+export const filteredAgents = computed<AgentRow[]>(() => {
+  let list = agents.value
+  const q = searchText.value.trim().toLowerCase()
+  if (q) {
+    list = list.filter((a) => a.label.toLowerCase().includes(q) || a.kind.toLowerCase().includes(q))
+  }
+  const sorted = [...list]
+  switch (sortKey.value) {
+    case 'cpu':
+      sorted.sort((a, b) => b.cpu - a.cpu)
+      break
+    case 'mem':
+      sorted.sort((a, b) => b.memMB - a.memMB)
+      break
+    case 'taskCount':
+      sorted.sort((a, b) => b.taskCount - a.taskCount)
+      break
+    case 'lastActive':
+      sorted.sort((a, b) => (b.lastActiveAt ?? 0) - (a.lastActiveAt ?? 0))
+      break
+    default:
+      sorted.sort((a, b) => statusOrder(a.status) - statusOrder(b.status) || b.cpu - a.cpu)
+  }
+  if (groupByKind.value) {
+    sorted.sort(
+      (a, b) => a.kind.localeCompare(b.kind) || statusOrder(a.status) - statusOrder(b.status)
+    )
+  }
+  return sorted
+})
 
-/** 弹系统目录选择器为某 agent 选择并保存启动目录；取消返回 null */
-export async function pickLaunchDir(kind: string): Promise<string | null> {
-  const dir = await api.pickDirectory()
-  if (!dir) return null
-  await api.setAgentLaunchDir(kind, dir)
-  launchDirs.value = { ...launchDirs.value, [kind]: dir }
-  return dir
-}
+export const groupedAgents = computed<Record<string, AgentRow[]>>(() => {
+  const out: Record<string, AgentRow[]> = {}
+  for (const a of filteredAgents.value) {
+    ;(out[a.kind] ??= []).push(a)
+  }
+  return out
+})
 
-/** 清除某 agent 的启动目录配置 */
-export async function clearLaunchDir(kind: string): Promise<void> {
-  await api.setAgentLaunchDir(kind, '')
-  const next = { ...launchDirs.value }
-  delete next[kind]
-  launchDirs.value = next
-}
-
-export const runningCount = computed(() => agents.value.filter((a) => a.status === 'running').length)
-
-export const installedCount = computed(() => agents.value.filter((a) => a.status === 'not-running').length)
-
-export const totalCpu = computed(() => Math.round(agents.value.reduce((s, a) => s + a.cpu, 0) * 10) / 10)
-
-export const totalMemMB = computed(() => Math.round(agents.value.reduce((s, a) => s + a.memMB, 0) * 10) / 10)
+// ---- 顶部统计 ----
+export const runningCount = computed(
+  () => agents.value.filter((a) => a.status === 'running').length
+)
+export const totalCpu = computed(
+  () => Math.round(agents.value.reduce((s, a) => s + a.cpu, 0) * 10) / 10
+)
+export const totalMemMB = computed(
+  () => Math.round(agents.value.reduce((s, a) => s + a.memMB, 0) * 10) / 10
+)
 
 /** 单个任务进程的显示内存 */
 export function taskMem(task: { memMB: number }): string {
@@ -71,87 +87,4 @@ export function formatDuration(ms?: number): string {
   if (m < 60) return `${m}m ${s % 60}s`
   const h = Math.floor(m / 60)
   return `${h}h ${String(m % 60).padStart(2, '0')}m`
-}
-
-/** 终止失败时给出明确提示，避免未处理异常 */
-async function notifyFailure(what: string): Promise<void> {
-  await confirmDialog({
-    title: '终止操作未完成',
-    body: `无法${what}。该进程可能已被结束、权限不足或已退出。\n你可以在服务监控/日志中确认其状态后重试。`,
-    confirmText: '知道了'
-  })
-}
-
-/** 安全结束某个 agent 派生任务进程 */
-export async function stopTask(pid: number): Promise<void> {
-  const ok = await confirmDialog({
-    title: '结束该 AI 任务进程？',
-    body: `将安全结束进程 pid=${pid} 及其子进程树。`,
-    danger: true,
-    confirmText: '结束进程'
-  })
-  if (!ok) return
-  try {
-    const r = await api.stopAgentTask(pid)
-    if (!r.ok) await notifyFailure(`结束该任务进程（pid=${pid}）`)
-  } catch {
-    await notifyFailure(`结束该任务进程（pid=${pid}）`)
-  }
-}
-
-/** 退出整个 agent 应用（进程树） */
-export async function stopAgent(row: AgentRow): Promise<void> {
-  if (!row.pid) return
-  const ok = await confirmDialog({
-    title: `退出「${row.label}」？`,
-    body: `将安全结束「${row.label}」及其全部子进程。若它正在跑任务会一并停止。`,
-    danger: true,
-    confirmText: '退出'
-  })
-  if (!ok) return
-  try {
-    const r = await api.stopAgent(row.pid)
-    if (!r.ok) await notifyFailure(`退出「${row.label}」`)
-  } catch {
-    await notifyFailure(`退出「${row.label}」`)
-  }
-}
-
-/** 确保该 agent 有可用的启动目录；没有则引导用户选择，取消返回 null */
-async function ensureLaunchDir(kind: string): Promise<string | null> {
-  const saved = getLaunchDir(kind)
-  if (saved) return saved
-  return pickLaunchDir(kind)
-}
-
-/** 重启 agent 应用（需先确定启动目录，仅内置启动命令可自动重启） */
-export async function restartAgent(row: AgentRow): Promise<boolean> {
-  const dir = await ensureLaunchDir(row.kind)
-  if (!dir) return false
-  const result = await api.restartAgent(row.kind, dir)
-  if (!result.ok) {
-    await confirmDialog({
-      title: '无法自动重启',
-      body: `未配置「${row.label}」的启动命令，请手动打开该应用。`,
-      confirmText: '知道了'
-    })
-    return false
-  }
-  return true
-}
-
-/** 启动一个已安装但未运行的 agent（需先选择启动目录） */
-export async function startAgent(row: AgentRow): Promise<boolean> {
-  const dir = await ensureLaunchDir(row.kind)
-  if (!dir) return false
-  const result = await api.startAgent(row.kind, dir)
-  if (!result.ok) {
-    await confirmDialog({
-      title: '无法自动启动',
-      body: `未找到「${row.label}」的可执行文件或启动命令，请确认安装情况后手动打开。`,
-      confirmText: '知道了'
-    })
-    return false
-  }
-  return true
 }

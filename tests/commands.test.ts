@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { findExecutable, hasShellSyntax, parseCommand, pickExecutablePath, tokenize } from '../src/main/commands'
+import {
+  findExecutable,
+  hasShellSyntax,
+  parseCommand,
+  pickExecutablePath,
+  tokenize
+} from '../src/main/commands'
 
 describe('tokenize', () => {
   it('处理引号与空白', () => {
@@ -21,7 +27,11 @@ describe('tokenize', () => {
 
 describe('parseCommand', () => {
   it('解析简单命令', () => {
-    expect(parseCommand('pnpm run dev')).toEqual({ exe: 'pnpm', args: ['run', 'dev'], shell: false })
+    expect(parseCommand('pnpm run dev')).toEqual({
+      exe: 'pnpm',
+      args: ['run', 'dev'],
+      shell: false
+    })
   })
 
   it('带引号的参数保持内容', () => {
@@ -51,7 +61,9 @@ describe('hasShellSyntax', () => {
 
 describe('pickExecutablePath', () => {
   it('where.exe 同时返回无扩展名脚本与 .cmd 时，优先选择带扩展名的可执行文件', () => {
-    expect(pickExecutablePath(['D:\\nodeJs\\npm', 'D:\\nodeJs\\npm.cmd'])).toBe('D:\\nodeJs\\npm.cmd')
+    expect(pickExecutablePath(['D:\\nodeJs\\npm', 'D:\\nodeJs\\npm.cmd'])).toBe(
+      'D:\\nodeJs\\npm.cmd'
+    )
   })
 
   it('仅有无扩展名路径时回退到第一行', () => {
@@ -69,7 +81,8 @@ describe('pickExecutablePath', () => {
 })
 
 describe('findExecutable', () => {
-  it('PATH 找不到时可按项目 bin 目录解析可执行文件', () => {    const dir = mkdtempSync(join(tmpdir(), 'dashboard-exe-'))
+  it('PATH 找不到时可按项目 bin 目录解析可执行文件', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'dashboard-exe-'))
     const binDir = join(dir, 'bin')
     mkdirSync(binDir, { recursive: true })
     const name = `probe-${Date.now()}-tool`
@@ -105,6 +118,24 @@ describe('findExecutable', () => {
     const p = findExecutable('mongod')
     if (process.platform === 'win32' && p) {
       expect(p.toLowerCase()).toContain('mongod')
+    }
+  })
+
+  it('可从 %LOCALAPPDATA%\\Programs 解析桌面 App 型 agent（如 Cursor）', () => {
+    if (process.platform !== 'win32') return
+    const base = mkdtempSync(join(tmpdir(), 'dashboard-lapp-'))
+    const prev = process.env['LOCALAPPDATA']
+    const exeName = `probe-app-${Date.now()}`
+    const appDir = join(base, 'Programs', 'probe-agent')
+    mkdirSync(appDir, { recursive: true })
+    const exe = join(appDir, `${exeName}.exe`)
+    writeFileSync(exe, '', 'binary')
+    process.env['LOCALAPPDATA'] = base
+    try {
+      expect(findExecutable(exeName)).toBe(exe)
+    } finally {
+      process.env['LOCALAPPDATA'] = prev
+      rmSync(base, { recursive: true, force: true })
     }
   })
 })

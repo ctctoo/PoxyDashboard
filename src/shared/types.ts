@@ -62,6 +62,32 @@ export interface Settings {
   launchpadView: 'grid' | 'list'
 }
 
+/** 用户自定义的 AI agent（非内置目录中的） */
+export interface CustomAgent {
+  kind: string
+  label: string
+  icon: string
+  /** 启动命令（如 `codex` 或 `my-agent`） */
+  command: string
+  /** 默认工作目录（可空） */
+  dir?: string
+  /** 启动时是否携带工作目录参数 */
+  withDirArg: boolean
+  createdAt: number
+}
+
+/** agent 任务进程的活动类型（由命令行启发式识别） */
+export type AgentActivity =
+  'test' | 'build' | 'dev-server' | 'install' | 'script' | 'shell' | 'git' | 'lint' | 'other'
+
+/** agent 健康度评估结果 */
+export interface AgentHealth {
+  level: 'healthy' | 'suspicious' | 'abnormal'
+  message: string
+  /** 一句诊断/建议文案 */
+  suggestion?: string
+}
+
 export interface HiddenPortEntry {
   port: number
   name: string
@@ -78,6 +104,8 @@ export interface ConfigFile {
   settings: Settings
   /** 每个 AI agent（按 kind）一键启动时使用的工作目录 */
   agentDirs: Record<string, string>
+  /** 用户自定义 agent */
+  customAgents: CustomAgent[]
 }
 
 export interface DetectionCandidate {
@@ -219,19 +247,23 @@ export interface AgentTaskProcess {
   memMB: number
   ports: number[]
   createdAt: number
+  /** 活动类型（命令行启发式识别） */
+  activity: AgentActivity
+  /** 活动的一句话描述（如「运行测试」） */
+  activityLabel: string
 }
 
 /** 一个 AI agent（应用本体 + 派生任务）聚合行 */
 export interface AgentRow {
   /** 稳定标识（agent 根进程 pid，或 `${kind}:${firstPid}`） */
   id: string
-  /** 'codex' | 'cursor' | 'claude' | 'kimi' | 'chatgpt' | 'gemini' | 'windsurf' | 'cline' | 'opencode' | 'ai' */
+  /** 'codex' | 'cursor' | 'claude' | 'kimi' | 'chatgpt' | 'gemini' | 'windsurf' | 'cline' | 'opencode' | 'ai'（含自定义 kind） */
   kind: string
   label: string
   icon: string
-  /** running=有任务进程或监听端口；idle=仅应用本体空闲；not-running=已安装但未启动 */
-  status: 'running' | 'idle' | 'not-running'
-  /** agent 应用根进程 pid（未启动时无） */
+  /** running=有任务进程或监听端口；idle=仅应用本体空闲；not-running=已安装但未启动；orphan=根已失活但留有孤儿任务 */
+  status: 'running' | 'idle' | 'not-running' | 'orphan'
+  /** agent 应用根进程 pid（未启动时无；orphan 时可能已失活） */
   pid?: number
   createdAt?: number
   /** 整树 CPU 汇总（%） */
@@ -243,6 +275,16 @@ export interface AgentRow {
   /** 派生任务进程数 */
   taskCount: number
   tasks: AgentTaskProcess[]
+  /** 是否由用户自定义 agent（非内置目录） */
+  custom?: boolean
+  /** 最近活动时间戳（末次任务进程启动/心跳） */
+  lastActiveAt?: number
+  /** 健康度评估（运行/孤儿态时存在） */
+  health?: AgentHealth
+  /** 已安装但未运行时的探测到的启动命令（可一键启动） */
+  launchCommand?: string
+  /** 统计：本会话累计运行时长（ms） */
+  totalRunMs?: number
 }
 
 export interface MonitorSnapshot {

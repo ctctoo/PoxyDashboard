@@ -79,7 +79,13 @@ export function parseScan(stdout: string): ScanData {
   const raw = JSON.parse(stdout) as {
     ts: number
     conns: Array<{ addr: string; port: number; pid: number }>
-    procs: Array<{ pid: number; ppid: number; name: string; cmd: string | null; created: string | null }>
+    procs: Array<{
+      pid: number
+      ppid: number
+      name: string
+      cmd: string | null
+      created: string | null
+    }>
     perf: Array<{ pid: number; cpu: number; mem: number; path: string | null }>
     os: { totalMemKB: number; freeMemKB: number } | null
     cpuPct: number | null
@@ -103,7 +109,10 @@ export function parseScan(stdout: string): ScanData {
     conns: raw.conns ?? [],
     procs,
     perf,
-    os: raw.os && typeof raw.os.totalMemKB === 'number' && typeof raw.os.freeMemKB === 'number' ? raw.os : undefined,
+    os:
+      raw.os && typeof raw.os.totalMemKB === 'number' && typeof raw.os.freeMemKB === 'number'
+        ? raw.os
+        : undefined,
     cpuPct: typeof raw.cpuPct === 'number' ? raw.cpuPct : undefined
   }
 }
@@ -125,10 +134,23 @@ const AI_NAMES = new Set([
   'gemini.exe',
   'windsurf.exe',
   'cline.exe',
-  'opencode.exe'
+  'opencode.exe',
+  // 桌面 App 型 AI agent（Cursor 等 AI 原生编辑器也归为 agent）
+  'cursor.exe',
+  'cursor-agent.exe'
 ])
 /** CLI 命令名：仅当作为可执行名/命令首 token 出现时才判定为 AI，避免误匹配任意含该子串的进程 */
-const AI_CMDS = ['codex', 'claude', 'kimi', 'chatgpt', 'gemini', 'windsurf', 'cline', 'copilot', 'opencode']
+const AI_CMDS = [
+  'codex',
+  'claude',
+  'kimi',
+  'chatgpt',
+  'gemini',
+  'windsurf',
+  'cline',
+  'copilot',
+  'opencode'
+]
 
 /** 已知的非 agent 应用（浏览器等）：即使命令行含 AI 关键词也绝不判为 ai */
 const NON_AGENT_NAMES = new Set([
@@ -145,7 +167,6 @@ const NON_AGENT_NAMES = new Set([
 ])
 const EDITOR_NAMES = new Set([
   'code.exe',
-  'cursor.exe',
   'vscodium.exe',
   'zed.exe',
   'sublime_text.exe',
@@ -230,7 +251,9 @@ function friendlyLabel(name: string, cmd: string): string {
       windsurf: 'Windsurf',
       cline: 'Cline',
       opencode: 'OpenCode',
-      copilot: 'Copilot'
+      copilot: 'Copilot',
+      cursor: 'Cursor',
+      'cursor-agent': 'Cursor'
     }
     return LABELS[key] ?? 'AI 助手'
   }
@@ -243,7 +266,8 @@ function friendlyLabel(name: string, cmd: string): string {
   if (n === 'cmd.exe') return '终端'
   if (n === 'powershell.exe' || n === 'pwsh.exe') return 'PowerShell'
   if (n === 'bash.exe' || n === 'zsh.exe' || n === 'fish.exe' || n === 'mintty.exe') return '终端'
-  if (n === 'explorer.exe' || n === 'svchost.exe' || n === 'dwm.exe' || n === 'services.exe') return '系统'
+  if (n === 'explorer.exe' || n === 'svchost.exe' || n === 'dwm.exe' || n === 'services.exe')
+    return '系统'
   return n.replace(/\.exe$/, '')
 }
 
@@ -274,7 +298,9 @@ export function classifyOrigin(
       kind = null
     } else if (
       AI_NAMES.has(name) ||
-      /(^|[\\\s])(codex|claude-code|claude|kimi|chatgpt|gemini|windsurf|cline|opencode)(\.exe)?$/i.test(name) ||
+      /(^|[\\\s])(codex|claude-code|claude|kimi|chatgpt|gemini|windsurf|cline|opencode)(\.exe)?$/i.test(
+        name
+      ) ||
       !!aiCommandIn(cmd)
     ) {
       kind = 'ai'

@@ -1,9 +1,23 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { Rocket, Activity, Database, Boxes, ScrollText, Settings as SettingsIcon, Terminal, Sun, Moon, MonitorCog, Keyboard, Zap, Bot } from '@lucide/vue'
+import {
+  Rocket,
+  Activity,
+  Database,
+  Boxes,
+  ScrollText,
+  Settings as SettingsIcon,
+  Terminal,
+  Sun,
+  Moon,
+  MonitorCog,
+  Keyboard,
+  Zap,
+  Bot
+} from '@lucide/vue'
 import { view, setView, openDashboardLogs } from './stores/view'
 import { initApps } from './stores/apps'
-import { initMonitor } from './stores/monitor'
+import { initMonitor, monitorReady } from './stores/monitor'
 import { initAgents } from './stores/agents'
 import { initLogs } from './stores/logs'
 import { initSettings, settings, cycleTheme } from './stores/settings'
@@ -100,7 +114,7 @@ onMounted(() => {
   const minShowMs = 500
   const maxWaitMs = 4000
   const startedAt = Date.now()
-  const doneAt = () => Date.now() - startedAt >= minShowMs
+  const doneAt = (): boolean => Date.now() - startedAt >= minShowMs
 
   let settled = false
   const finish = (): void => {
@@ -111,13 +125,14 @@ onMounted(() => {
     bootSteps.value = arr
     booted.value = true
   }
-  // 任一数据源失败/完成都不阻塞，等最短展示时间或超时即进入应用
+  // 任一数据源失败/完成都不阻塞，等最短展示时间或超时即进入应用；
+  // 额外等待首帧监控快照（monitorReady），避免启动动画结束后各视图又闪加载态
   const timer = setInterval(() => {
     if (settled) {
       clearInterval(timer)
       return
     }
-    if (bootSteps.value.every((s) => s === 'done') && doneAt()) finish()
+    if (bootSteps.value.every((s) => s === 'done') && monitorReady.value && doneAt()) finish()
     else if (Date.now() - startedAt >= maxWaitMs) finish()
   }, 50)
 })
@@ -128,40 +143,71 @@ onMounted(() => {
     <AppBootLoader v-if="!booted" :steps="bootSteps" />
   </Transition>
 
-  <div v-if="booted" class="flex h-screen overflow-hidden bg-paper text-ink dark:bg-coal dark:text-chalk">
+  <div
+    v-if="booted"
+    class="flex h-screen overflow-hidden bg-paper text-ink dark:bg-coal dark:text-chalk"
+  >
     <!-- 侧栏：跟随主题 -->
-    <aside class="desk-grid flex w-60 shrink-0 flex-col border-r border-line bg-paper dark:border-coal-line dark:bg-coal">
+    <aside
+      class="desk-grid flex w-60 shrink-0 flex-col border-r border-line bg-paper dark:border-coal-line dark:bg-coal"
+    >
       <!-- 品牌区：电源开关 -->
       <div class="flex h-16 items-center gap-3 border-b border-line px-5 dark:border-coal-line">
-        <div class="relative grid h-9 w-9 place-items-center rounded-md border border-signal/60 bg-signal/15 text-signal dark:text-signal-soft">
+        <div
+          class="relative grid h-9 w-9 place-items-center rounded-md border border-signal/60 bg-signal/15 text-signal dark:text-signal-soft"
+        >
           <Zap :size="17" class="fill-current" />
           <span class="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-signal pulse-dot" />
         </div>
         <div class="leading-none">
-          <div class="font-mono text-[15px] font-bold tracking-[0.08em] text-ink dark:text-chalk">总控台</div>
-          <div class="mt-1 font-mono text-[10px] uppercase tracking-[0.2em] text-ink-soft/70 dark:text-chalk-soft/70">Service · Task · Monitor</div>
+          <div class="font-mono text-[15px] font-bold tracking-[0.08em] text-ink dark:text-chalk">
+            总控台
+          </div>
+          <div
+            class="mt-1 font-mono text-[10px] uppercase tracking-[0.2em] text-ink-soft/70 dark:text-chalk-soft/70"
+          >
+            Service · Task · Monitor
+          </div>
         </div>
       </div>
 
-      <div class="px-4 pt-4 pb-1 font-mono text-[10px] uppercase tracking-[0.22em] text-ink-soft/60 dark:text-chalk-soft/50">Modules</div>
+      <div
+        class="px-4 pt-4 pb-1 font-mono text-[10px] uppercase tracking-[0.22em] text-ink-soft/60 dark:text-chalk-soft/50"
+      >
+        Modules
+      </div>
       <nav class="flex-1 space-y-0.5 overflow-auto px-3 py-2">
-        <button v-for="item in navItems" :key="item.key" class="nav-item w-full" :class="{ active: view === item.key }" @click="setView(item.key)">
-          <span class="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-line bg-paper-raised text-ink-soft dark:border-coal-line dark:bg-coal-raised dark:text-chalk-soft">
+        <button
+          v-for="item in navItems"
+          :key="item.key"
+          class="nav-item w-full"
+          :class="{ active: view === item.key }"
+          @click="setView(item.key)"
+        >
+          <span
+            class="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-line bg-paper-raised text-ink-soft dark:border-coal-line dark:bg-coal-raised dark:text-chalk-soft"
+          >
             <component :is="item.icon" :size="14" />
           </span>
           <span class="flex-1 text-left">{{ item.label }}</span>
-          <span class="font-mono text-[10px] text-ink-soft/50 dark:text-chalk-soft/40">{{ item.code }}</span>
+          <span class="font-mono text-[10px] text-ink-soft/50 dark:text-chalk-soft/40">{{
+            item.code
+          }}</span>
         </button>
       </nav>
 
       <div class="space-y-1 border-t border-line p-3 dark:border-coal-line">
         <button class="nav-item w-full" @click="openDashboardLogs">
-          <span class="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-line bg-paper-raised text-ink-soft dark:border-coal-line dark:bg-coal-raised dark:text-chalk-soft">
+          <span
+            class="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-line bg-paper-raised text-ink-soft dark:border-coal-line dark:bg-coal-raised dark:text-chalk-soft"
+          >
             <Terminal :size="14" />
           </span>
           <span class="flex-1 text-left">总控台日志</span>
         </button>
-        <div class="mt-2 flex items-center justify-between px-3 font-mono text-[10px] text-ink-soft/70 dark:text-chalk-soft/60">
+        <div
+          class="mt-2 flex items-center justify-between px-3 font-mono text-[10px] text-ink-soft/70 dark:text-chalk-soft/60"
+        >
           <span class="flex items-center gap-1.5"><Keyboard :size="11" /> ⌘K 命令</span>
           <span class="flex items-center gap-1.5"><Keyboard :size="11" /> ⌘J 日志</span>
         </div>
@@ -170,16 +216,24 @@ onMounted(() => {
 
     <main class="flex min-w-0 flex-1 flex-col">
       <!-- 仪器头部：细条状态栏 -->
-      <header class="flex h-12 shrink-0 items-center justify-between border-b border-line bg-paper-raised px-5 dark:border-coal-line dark:bg-coal-raised">
+      <header
+        class="flex h-12 shrink-0 items-center justify-between border-b border-line bg-paper-raised px-5 dark:border-coal-line dark:bg-coal-raised"
+      >
         <div class="flex items-baseline gap-3">
           <h1 class="font-mono text-sm font-bold tracking-wide">{{ titles[view].title }}</h1>
-          <span class="hidden font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft sm:inline dark:text-chalk-soft">{{ titles[view].sub }}</span>
+          <span
+            class="hidden font-mono text-[11px] uppercase tracking-[0.16em] text-ink-soft sm:inline dark:text-chalk-soft"
+            >{{ titles[view].sub }}</span
+          >
         </div>
         <div class="flex items-center gap-1.5">
           <button class="btn-ghost btn-sm" @click="togglePalette">
             <Keyboard :size="12" />
             命令面板
-            <kbd class="ml-0.5 rounded border border-line bg-paper px-1 font-mono text-[10px] text-ink-soft dark:border-coal-line dark:bg-black/30 dark:text-chalk-soft">⌘K</kbd>
+            <kbd
+              class="ml-0.5 rounded border border-line bg-paper px-1 font-mono text-[10px] text-ink-soft dark:border-coal-line dark:bg-black/30 dark:text-chalk-soft"
+              >⌘K</kbd
+            >
           </button>
           <span class="mx-1 h-5 w-px bg-line dark:bg-coal-line" />
           <button class="icon-btn" :title="`外观：${settings.theme}`" @click="cycleTheme">
@@ -189,9 +243,11 @@ onMounted(() => {
       </header>
 
       <div class="min-h-0 flex-1 overflow-hidden p-5">
-        <KeepAlive>
-          <component :is="viewComp" />
-        </KeepAlive>
+        <Transition name="view" mode="out-in">
+          <KeepAlive>
+            <component :is="viewComp" />
+          </KeepAlive>
+        </Transition>
       </div>
     </main>
 

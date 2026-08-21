@@ -12,7 +12,7 @@
 ## 功能
 
 ### 启动台
-- 添加服务 / 任务：选择工作区文件夹后自动识别项目类型（Node/pnpm/yarn、Hexo、Hugo、Django、FastAPI、Flask、Go、Rust、静态站点等）并给出候选命令；也可以「选择脚本」（自动生成执行命令）或完全手动填写。
+- 添加服务 / 任务：选择工作区文件夹后自动识别项目类型（Node/pnpm/yarn/bun、Hexo、Hugo、Django、FastAPI、Flask、Go、Rust、Deno、.NET、Maven/Gradle、静态站点等）并给出候选命令，识别到常用脚本时自动推断端口；也可以「选择脚本」（自动生成执行命令）或完全手动填写。
 - service 是长期服务（端口语义，运行后自动发现监听端口）；task 是批处理（强制无端口，按退出码判定结果）。
 - 卡片：大按钮启动/停止（任务是运行/中止）；右侧常显一排小按钮：复制链接、日志、诊断、重启、编辑、删除。
 - 配置失效（目录/脚本丢失、命令不在 PATH）直接标出原因并禁用启动；「启动诊断」给出修复建议。
@@ -48,16 +48,21 @@
 - 外观三态：自动 / 浅色 / 深色。
 - 关于：版本、本地端口、工作目录、数据目录、运行环境。
 
-### AI Agent 管理
-- 统一展示本机的 AI agent 工具（Codex / Cursor / Claude / Kimi / OpenCode / ChatGPT / Gemini / Windsurf / Cline 等），聚合为卡片视图。
-- **自动检测已安装的 agent**：即使未启动，也会通过 npm 全局 bin / PATH 探测本机已安装的 agent，展示为「未启动」状态，可一键启动。
-- 每个 agent 卡展示应用本体与资源占用（CPU / 内存 / 端口 / 运行时长），展开可查看其派生的任务进程（命令行推断）。
-- 进程控制：可安全结束单个任务进程（killTree 进程树）；可退出、重启或启动 agent 应用本体（内置启动命令表；未知 agent 明确提示手动打开）。
+### AI Agent
+- **只读展示当前正在运行的 AI agent**（Codex / Claude / OpenCode / Kimi / ChatGPT / Gemini / Windsurf / Cursor / Cline 等），聚合为卡片视图，不提供任何启动/停止/重启等控制能力。
+- **自动检测**：覆盖命令行版（npm 全局 bin / PATH / `~/.codex/bin` / `~/.local/bin`）与桌面应用版（`%LOCALAPPDATA%\Programs\` 下的 Cursor、Windsurf、ChatGPT 桌面版等），已安装即自动出现。
+- 每张卡片展示状态、PID、运行时长（本次启动 + 会话累计）、CPU / 内存占用、监听端口、健康度（正常 / 可疑 / 异常），展开可查看派生的任务进程（命令行推断 + 活动类型识别）。
 - **精确识别**：AI 判定采用命令名边界匹配 + 浏览器黑名单，避免把 Edge/Chrome 等误判为 agent。
+- 支持按 CPU / 内存 / 任务数 / 最近活动排序、关键字搜索、按类型分组。
 - 集成命令面板：`打开 AI Agent` 可一键切换视图。
 
 ### 命令面板（⌘K）
 - 全局搜索并执行：添加服务/任务、启动/停止/重启任意应用、打开页面、查看日志、切换视图、开关任务通知、查看总控台日志，全键盘操作。
+
+### 加载与体验
+- 应用启动时展示品牌启动动画（含配置/应用/进程/Agent 四步加载进度），待首帧监控数据就绪后淡出。
+- 服务监控 / AI Agent / 数据库 / Docker / 启动台在数据未就绪时显示骨架屏加载动画，而非空白或误导性的空态。
+- 视图切换带淡入 + 位移动画，交互更平滑；支持自动 / 浅色 / 深色三态主题。
 
 ## 使用要点
 
@@ -110,15 +115,18 @@ src/
 ├── main/            # Electron 主进程：进程管理、端口扫描、监控、日志、IPC
 │   ├── index.ts     # 窗口 / 托盘 / 快捷键 / 本地只读 HTTP 服务
 │   ├── processManager.ts  # 启停、进程树安全停止、退出码语义
-│   ├── monitor.ts   # 端口扫描调度、新端口提醒、已认领进程状态
-│   ├── agentAggregator.ts # AI agent 进程树聚合（应用本体 + 派生任务）
-│   ├── agentLauncher.ts   # 常见 AI agent 的启动命令表
-│   ├── agentDetect.ts     # 已安装 agent 探测（npm 全局 bin / PATH）
+│   ├── monitor.ts   # 端口扫描调度、新端口提醒、运行中 agent 聚合
+│   ├── agentAggregator.ts # AI agent 进程树聚合（应用本体 + 派生任务 + 活动识别 + 健康度）
 │   ├── portScanner.ts     # PowerShell 采集监听端口与进程信息、溯源分类
-│   ├── projectDetect.ts   # 项目类型识别 / 脚本命令生成
+│   ├── projectDetect.ts   # 项目类型识别 / 脚本命令生成（Node/Hexo/Go/Rust/Deno/.NET 等）
 │   ├── logger.ts    # 环形缓冲 + 滚动日志文件
 │   └── config.ts    # JSON 配置存储（原子写入）
 ├── preload/         # contextBridge 类型化 API
 ├── renderer/        # Vue 3 界面：启动台 / 监控 / 数据库 / Docker / AI Agent / 日志 / 设置 / 命令面板
+│   └── components/
+│       ├── ViewLoading.vue   # 各视图数据未就绪时的骨架屏加载动画
+│       └── AgentCard.vue     # 运行中 AI agent 卡片
 └── shared/          # 主进程与渲染进程共享的类型定义
 ```
+
+> 说明：`agentLauncher.ts` / `agentDetect.ts` 作为独立的启动命令 / 检测知识模块保留，当前 AI Agent 业务为只读展示，已不调用其控制逻辑。

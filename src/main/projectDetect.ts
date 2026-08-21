@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, statSync } from 'fs'
+import { existsSync, readFileSync, readdirSync, statSync } from 'fs'
 import { basename, extname, join } from 'path'
 import type { DetectionCandidate, DetectionResult } from '../shared/types'
 
@@ -10,7 +10,16 @@ const PACKAGE_MANAGERS: ReadonlyArray<readonly [string, string]> = [
   ['npm-shrinkwrap.json', 'npm']
 ]
 
-const SCRIPT_PRIORITY = ['dev', 'start', 'serve', 'preview', 'web', 'docs:dev', 'docs:start', 'build']
+const SCRIPT_PRIORITY = [
+  'dev',
+  'start',
+  'serve',
+  'preview',
+  'web',
+  'docs:dev',
+  'docs:start',
+  'build'
+]
 
 function firstExisting(dir: string, names: string[]): string | null {
   for (const n of names) {
@@ -38,7 +47,11 @@ export function detectProject(dir: string): DetectionResult {
 
   const pkgPath = firstExisting(dir, ['package.json'])
   if (pkgPath) {
-    let pkg: { scripts?: Record<string, string>; main?: string; bin?: string | Record<string, string> } | null = null
+    let pkg: {
+      scripts?: Record<string, string>
+      main?: string
+      bin?: string | Record<string, string>
+    } | null = null
     try {
       pkg = JSON.parse(readFileSync(pkgPath, 'utf8'))
     } catch {
@@ -49,7 +62,12 @@ export function detectProject(dir: string): DetectionResult {
     const scripts = pkg?.scripts ?? {}
     for (const name of SCRIPT_PRIORITY) {
       if (scripts[name]) {
-        candidates.push({ command: `${pm} run ${name}`, kind: 'service', label: `${pm} ${name}`, port: guessPortFromScript(scripts[name]) })
+        candidates.push({
+          command: `${pm} run ${name}`,
+          kind: 'service',
+          label: `${pm} ${name}`,
+          port: guessPortFromScript(scripts[name])
+        })
       }
     }
     const mainFile = pkg?.main
@@ -57,8 +75,17 @@ export function detectProject(dir: string): DetectionResult {
       candidates.push({ command: `node ${mainFile}`, kind: 'service', label: `node ${mainFile}` })
     }
     const hexoConf = firstExisting(dir, ['_config.yml', '_config.yaml'])
-    if (hexoConf && /hexo/.test(JSON.stringify(pkg ?? {})) && existsSync(join(dir, 'node_modules', 'hexo'))) {
-      candidates.unshift({ command: 'npx hexo server', kind: 'service', label: 'Hexo 服务', port: 4000 })
+    if (
+      hexoConf &&
+      /hexo/.test(JSON.stringify(pkg ?? {})) &&
+      existsSync(join(dir, 'node_modules', 'hexo'))
+    ) {
+      candidates.unshift({
+        command: 'npx hexo server',
+        kind: 'service',
+        label: 'Hexo 服务',
+        port: 4000
+      })
     }
     if (!candidates.length && pkg) {
       notes.push('未找到常用启动脚本（dev/start/serve/preview），可手动填写命令')
@@ -73,7 +100,12 @@ export function detectProject(dir: string): DetectionResult {
   }
 
   if (existsSync(join(dir, 'manage.py'))) {
-    candidates.unshift({ command: 'python manage.py runserver', kind: 'service', label: 'Django 服务', port: 8000 })
+    candidates.unshift({
+      command: 'python manage.py runserver',
+      kind: 'service',
+      label: 'Django 服务',
+      port: 8000
+    })
   }
 
   const fastapiFile = firstExisting(dir, ['main.py', 'app.py'])
@@ -81,9 +113,19 @@ export function detectProject(dir: string): DetectionResult {
     const content = readFirst(dir, [basename(fastapiFile)]) ?? ''
     if (/fastapi|uvicorn/i.test(content)) {
       const mod = basename(fastapiFile).replace(/\.py$/, '')
-      candidates.unshift({ command: `uvicorn ${mod}:app --reload`, kind: 'service', label: 'FastAPI 服务', port: 8000 })
+      candidates.unshift({
+        command: `uvicorn ${mod}:app --reload`,
+        kind: 'service',
+        label: 'FastAPI 服务',
+        port: 8000
+      })
     } else if (/flask/i.test(content)) {
-      candidates.unshift({ command: `python ${basename(fastapiFile)}`, kind: 'service', label: 'Flask 服务', port: 5000 })
+      candidates.unshift({
+        command: `python ${basename(fastapiFile)}`,
+        kind: 'service',
+        label: 'Flask 服务',
+        port: 5000
+      })
     }
   }
 
@@ -94,6 +136,34 @@ export function detectProject(dir: string): DetectionResult {
     candidates.push({ command: 'cargo run', kind: 'service', label: 'Rust 服务' })
   }
 
+  // Deno 项目
+  const denoConf = firstExisting(dir, ['deno.json', 'deno.jsonc'])
+  if (denoConf) {
+    const denoContent = readFirst(dir, [basename(denoConf)]) ?? ''
+    if (/"tasks"\s*:/i.test(denoContent) && /"dev"\s*:/i.test(denoContent)) {
+      candidates.push({ command: 'deno task dev', kind: 'service', label: 'Deno (task dev)' })
+    } else {
+      candidates.push({
+        command: 'deno run --allow-net main.ts',
+        kind: 'service',
+        label: 'Deno 服务'
+      })
+    }
+  }
+
+  // .NET 项目（匹配任意 *.csproj / *.sln / Program.cs）
+  let hasDotnet = existsSync(join(dir, 'Program.cs'))
+  if (!hasDotnet) {
+    try {
+      hasDotnet = readdirSync(dir).some((f) => /\.(csproj|sln)$/i.test(f))
+    } catch {
+      /* 忽略 */
+    }
+  }
+  if (hasDotnet) {
+    candidates.push({ command: 'dotnet run', kind: 'service', label: '.NET 服务' })
+  }
+
   const pomPath = firstExisting(dir, ['pom.xml'])
   if (pomPath) {
     const pom = readFirst(dir, ['pom.xml']) ?? ''
@@ -101,7 +171,12 @@ export function detectProject(dir: string): DetectionResult {
     const mvnwSh = existsSync(join(dir, 'mvnw'))
     const mvn = process.platform === 'win32' && mvnwWin ? '.\\mvnw.cmd' : mvnwSh ? './mvnw' : 'mvn'
     if (/spring-boot/i.test(pom)) {
-      candidates.unshift({ command: `${mvn} spring-boot:run`, kind: 'service', label: 'Maven · Spring Boot', port: 8080 })
+      candidates.unshift({
+        command: `${mvn} spring-boot:run`,
+        kind: 'service',
+        label: 'Maven · Spring Boot',
+        port: 8080
+      })
     } else {
       candidates.push({ command: `${mvn} compile`, kind: 'task', label: 'Maven 编译' })
     }
@@ -112,9 +187,19 @@ export function detectProject(dir: string): DetectionResult {
     const build = readFirst(dir, [basename(gradlePath)]) ?? ''
     const gradlewWin = existsSync(join(dir, 'gradlew.bat'))
     const gradlewSh = existsSync(join(dir, 'gradlew'))
-    const gradle = process.platform === 'win32' && gradlewWin ? '.\\gradlew.bat' : gradlewSh ? './gradlew' : 'gradle'
+    const gradle =
+      process.platform === 'win32' && gradlewWin
+        ? '.\\gradlew.bat'
+        : gradlewSh
+          ? './gradlew'
+          : 'gradle'
     if (/spring-boot|org\.springframework\.boot/i.test(build)) {
-      candidates.unshift({ command: `${gradle} bootRun`, kind: 'service', label: 'Gradle · Spring Boot', port: 8080 })
+      candidates.unshift({
+        command: `${gradle} bootRun`,
+        kind: 'service',
+        label: 'Gradle · Spring Boot',
+        port: 8080
+      })
     } else if (/id\s+['"]application['"]/i.test(build)) {
       candidates.push({ command: `${gradle} run`, kind: 'service', label: 'Gradle · application' })
     } else {
@@ -122,7 +207,9 @@ export function detectProject(dir: string): DetectionResult {
     }
   }
 
-  const pyScripts = ['main.py', 'app.py', 'server.py', 'run.py'].filter((f) => existsSync(join(dir, f)))
+  const pyScripts = ['main.py', 'app.py', 'server.py', 'run.py'].filter((f) =>
+    existsSync(join(dir, f))
+  )
   for (const f of pyScripts) {
     if (!candidates.some((c) => c.command.includes(f))) {
       candidates.push({ command: `python ${f}`, kind: 'task', label: `python ${f}` })
@@ -131,14 +218,28 @@ export function detectProject(dir: string): DetectionResult {
 
   const mongodCfg = firstExisting(dir, ['mongod.cfg', 'mongod.conf', 'mongod.yml'])
   if (mongodCfg) {
-    candidates.push({ command: `mongod --config ${basename(mongodCfg)}`, kind: 'service', label: 'MongoDB 服务' })
+    candidates.push({
+      command: `mongod --config ${basename(mongodCfg)}`,
+      kind: 'service',
+      label: 'MongoDB 服务'
+    })
   } else if (existsSync(join(dir, 'data', 'db'))) {
     candidates.push({ command: 'mongod --dbpath data\\db', kind: 'service', label: 'MongoDB 服务' })
   }
 
   if (existsSync(join(dir, 'index.html')) || existsSync(join(dir, 'public', 'index.html'))) {
-    candidates.push({ command: 'npx serve . -l 8080', kind: 'service', label: '静态站点 (serve)', port: 8080 })
-    candidates.push({ command: 'python -m http.server 8080', kind: 'service', label: '静态站点 (python)', port: 8080 })
+    candidates.push({
+      command: 'npx serve . -l 8080',
+      kind: 'service',
+      label: '静态站点 (serve)',
+      port: 8080
+    })
+    candidates.push({
+      command: 'python -m http.server 8080',
+      kind: 'service',
+      label: '静态站点 (python)',
+      port: 8080
+    })
   }
 
   const scripts = ['dev.sh', 'start.sh', 'run.sh', 'deploy.sh']
@@ -185,6 +286,8 @@ function resolveTypeLabel(candidates: DetectionCandidate[]): string {
   if (labels.some((l) => l.startsWith('node '))) return 'Node 脚本'
   if (labels.some((l) => l.startsWith('go '))) return 'Go'
   if (labels.some((l) => l.startsWith('cargo '))) return 'Rust'
+  if (labels.some((l) => /^deno/i.test(l))) return 'Deno'
+  if (labels.some((l) => /^\.net|^dotnet/i.test(l))) return '.NET'
   if (labels.some((l) => l.includes('Spring Boot'))) return 'Java (Spring Boot)'
   if (labels.some((l) => l.includes('静态'))) return '静态站点'
   return '脚本'
@@ -197,18 +300,42 @@ export function scriptCommand(scriptPath: string): DetectionResult {
   const ext = extname(scriptPath).toLowerCase()
   const map: Record<string, { command: string; label: string; kind: 'task' | 'service' }> = {
     '.js': { command: `node "${scriptPath}"`, label: `node ${basename(scriptPath)}`, kind: 'task' },
-    '.mjs': { command: `node "${scriptPath}"`, label: `node ${basename(scriptPath)}`, kind: 'task' },
-    '.cjs': { command: `node "${scriptPath}"`, label: `node ${basename(scriptPath)}`, kind: 'task' },
-    '.ts': { command: `npx tsx "${scriptPath}"`, label: `tsx ${basename(scriptPath)}`, kind: 'task' },
-    '.py': { command: `python "${scriptPath}"`, label: `python ${basename(scriptPath)}`, kind: 'task' },
+    '.mjs': {
+      command: `node "${scriptPath}"`,
+      label: `node ${basename(scriptPath)}`,
+      kind: 'task'
+    },
+    '.cjs': {
+      command: `node "${scriptPath}"`,
+      label: `node ${basename(scriptPath)}`,
+      kind: 'task'
+    },
+    '.ts': {
+      command: `npx tsx "${scriptPath}"`,
+      label: `tsx ${basename(scriptPath)}`,
+      kind: 'task'
+    },
+    '.py': {
+      command: `python "${scriptPath}"`,
+      label: `python ${basename(scriptPath)}`,
+      kind: 'task'
+    },
     '.sh': { command: `bash "${scriptPath}"`, label: `bash ${basename(scriptPath)}`, kind: 'task' },
-    '.ps1': { command: `powershell -NoProfile -ExecutionPolicy Bypass -File "${scriptPath}"`, label: `powershell ${basename(scriptPath)}`, kind: 'task' },
+    '.ps1': {
+      command: `powershell -NoProfile -ExecutionPolicy Bypass -File "${scriptPath}"`,
+      label: `powershell ${basename(scriptPath)}`,
+      kind: 'task'
+    },
     '.bat': { command: `"${scriptPath}"`, label: basename(scriptPath), kind: 'task' },
     '.cmd': { command: `"${scriptPath}"`, label: basename(scriptPath), kind: 'task' }
   }
   const hit = map[ext]
   if (!hit) {
-    return { type: '未知脚本类型', candidates: [{ command: `"${scriptPath}"`, kind: 'task', label: basename(scriptPath) }], notes: [`未识别的扩展名 ${ext}，将直接执行`] }
+    return {
+      type: '未知脚本类型',
+      candidates: [{ command: `"${scriptPath}"`, kind: 'task', label: basename(scriptPath) }],
+      notes: [`未识别的扩展名 ${ext}，将直接执行`]
+    }
   }
   return { type: ext.slice(1).toUpperCase() + ' 脚本', candidates: [hit] }
 }
@@ -221,7 +348,9 @@ export function guessCwd(cmdline: string | null): string | undefined {
     if (!/^[A-Za-z]:[\\/]/.test(cleaned)) continue
     try {
       if (statSync(cleaned).isFile() && !/\.(exe|cmd|bat|com)$/i.test(cleaned)) {
-        return cleaned.slice(0, Math.max(cleaned.lastIndexOf('\\'), cleaned.lastIndexOf('/'))).replace(/\\+$/, '')
+        return cleaned
+          .slice(0, Math.max(cleaned.lastIndexOf('\\'), cleaned.lastIndexOf('/')))
+          .replace(/\\+$/, '')
       }
     } catch {
       /* 忽略 */

@@ -104,6 +104,34 @@ describe('detectProject', () => {
     expect(r.candidates.some((c) => c.label.includes('静态站点'))).toBe(true)
   })
 
+  it('识别 Deno 项目（含 dev task）', () => {
+    const dir = makeProject({
+      'deno.json': JSON.stringify({ tasks: { dev: 'deno run --watch main.ts' } })
+    })
+    const r = detectProject(dir)
+    expect(r.type).toBe('Deno')
+    expect(r.candidates.some((c) => c.command === 'deno task dev')).toBe(true)
+  })
+
+  it('识别 Deno 项目（无 dev task 时回退 main.ts）', () => {
+    const dir = makeProject({ 'deno.json': JSON.stringify({}) })
+    const r = detectProject(dir)
+    expect(r.candidates.some((c) => c.command === 'deno run --allow-net main.ts')).toBe(true)
+  })
+
+  it('识别 .NET 项目（csproj）', () => {
+    const dir = makeProject({ 'app.csproj': '<Project Sdk="Microsoft.NET.Sdk.Web"></Project>' })
+    const r = detectProject(dir)
+    expect(r.type).toBe('.NET')
+    expect(r.candidates.some((c) => c.command === 'dotnet run')).toBe(true)
+  })
+
+  it('识别 .NET 项目（Program.cs）', () => {
+    const dir = makeProject({ 'Program.cs': 'Console.WriteLine("hi");' })
+    const r = detectProject(dir)
+    expect(r.candidates.some((c) => c.command === 'dotnet run')).toBe(true)
+  })
+
   it('识别 MongoDB 配置目录', () => {
     const dir = makeProject({ 'mongod.cfg': 'storage:\n  dbPath: data/db' })
     const r = detectProject(dir)

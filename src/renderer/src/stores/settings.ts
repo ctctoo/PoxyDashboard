@@ -2,7 +2,11 @@ import { reactive, ref } from 'vue'
 import { api } from '../lib/api'
 import type { AppInfo, Settings } from '@shared/types'
 
-export const settings = reactive<Settings>({ notifyTaskComplete: true, theme: 'auto', launchpadView: 'grid' })
+export const settings = reactive<Settings>({
+  notifyTaskComplete: true,
+  theme: 'auto',
+  launchpadView: 'grid'
+})
 export const appInfo = ref<AppInfo | null>(null)
 
 export async function initSettings(): Promise<void> {
@@ -21,7 +25,8 @@ export async function initSettings(): Promise<void> {
 
 export function applyTheme(): void {
   const dark =
-    settings.theme === 'dark' || (settings.theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+    settings.theme === 'dark' ||
+    (settings.theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches)
   document.documentElement.classList.toggle('dark', dark)
 }
 
