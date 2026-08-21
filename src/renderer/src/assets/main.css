@@ -190,6 +190,14 @@ textarea {
   animation: pulse-dot 1.6s ease-in-out infinite;
 }
 
+/* 启动加载动画淡出 */
+.boot-leave-active {
+  transition: opacity 0.35s ease;
+}
+.boot-leave-to {
+  opacity: 0;
+}
+
 .row-move,
 .row-enter-active,
 .row-leave-active {

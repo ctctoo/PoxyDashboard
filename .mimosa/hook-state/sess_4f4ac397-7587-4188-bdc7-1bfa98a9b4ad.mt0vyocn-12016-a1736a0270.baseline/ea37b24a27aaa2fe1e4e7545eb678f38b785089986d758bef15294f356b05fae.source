@@ -17,16 +17,6 @@ let tray: Tray | null = null
 let quitting = false
 let appLogger: LoggerService | null = null
 
-const DEFAULT_STATUS_PORT = 16888
-function resolveStatusPort(): number {
-  const raw = process.env['DASH_STATUS_PORT']
-  if (raw) {
-    const n = Number(raw)
-    if (Number.isInteger(n) && n >= 1 && n <= 65535) return n
-  }
-  return DEFAULT_STATUS_PORT
-}
-
 function send(channel: string, payload?: unknown): void {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload)
 }
@@ -289,14 +279,7 @@ if (!gotLock) {
     httpServer.once('listening', () => {
       appInfo.port = (httpServer.address() as AddressInfo | null)?.port ?? 0
     })
-    const statusPort = resolveStatusPort()
-    httpServer.on('error', (err) => {
-      if ((err as NodeJS.ErrnoException).code === 'EADDRINUSE') {
-        logger.business(`状态端口 ${statusPort} 被占用，改用随机端口`)
-        httpServer.listen(0, '127.0.0.1')
-      }
-    })
-    httpServer.listen(statusPort, '127.0.0.1')
+    httpServer.listen(0, '127.0.0.1')
 
     registerIpc({ cfg, pm, logger, monitor, appInfo })
     createWindow()

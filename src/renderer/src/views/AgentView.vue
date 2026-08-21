@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { Bot, ChevronDown, ChevronRight, Cpu, HardDrive, Play, Power, RotateCw, Square, XCircle } from '@lucide/vue'
+import { Bot, ChevronDown, ChevronRight, Cpu, Folder, FolderOpen, HardDrive, Play, Power, RotateCw, Square, XCircle } from '@lucide/vue'
 import type { AgentRow } from '@shared/types'
 import {
   agents,
   formatDuration,
+  getLaunchDir,
   installedCount,
+  pickLaunchDir,
   restartAgent,
   runningCount,
   startAgent,
@@ -58,6 +60,15 @@ async function onStartAgent(row: AgentRow): Promise<void> {
   actingAgent.value = row.id
   try {
     await startAgent(row)
+  } finally {
+    actingAgent.value = null
+  }
+}
+
+async function onPickDir(row: AgentRow): Promise<void> {
+  actingAgent.value = row.id
+  try {
+    await pickLaunchDir(row.kind)
   } finally {
     actingAgent.value = null
   }
@@ -154,6 +165,24 @@ function statusLabel(row: AgentRow): string {
           <span v-if="row.status !== 'not-running'" class="ml-auto text-ink-soft/70 dark:text-chalk-soft/70">{{ row.taskCount }} 个任务进程</span>
         </div>
 
+        <!-- 启动工作目录 -->
+        <div class="mt-2 flex items-center gap-1.5 rounded-md border border-line/70 bg-paper px-2 py-1.5 font-mono text-[11px] dark:border-coal-line/70 dark:bg-black/20">
+          <Folder :size="12" class="shrink-0 text-inspect" />
+          <span v-if="getLaunchDir(row.kind)" class="min-w-0 flex-1 truncate text-ink-soft dark:text-chalk-soft" :title="getLaunchDir(row.kind) ?? undefined">
+            {{ getLaunchDir(row.kind) }}
+          </span>
+          <span v-else class="flex-1 text-ink-soft/60 dark:text-chalk-soft/60">未设置启动目录</span>
+          <button
+            class="icon-btn !h-5 !w-5 hover:!text-signal"
+            :title="getLaunchDir(row.kind) ? '更换启动目录' : '选择启动目录'"
+            :disabled="actingAgent === row.id"
+            @click="onPickDir(row)"
+          >
+            <FolderOpen v-if="actingAgent !== row.id" :size="12" />
+            <span v-else class="h-3 w-3 animate-spin rounded-full border-2 border-signal/40 border-t-signal" />
+          </button>
+        </div>
+
         <!-- 派生任务进程 -->
         <template v-if="row.status !== 'not-running'">
           <div v-if="row.tasks.length" class="mt-2">
@@ -202,7 +231,7 @@ function statusLabel(row: AgentRow): string {
           </p>
         </template>
         <p v-else class="mt-2 rounded-md border border-dashed border-line px-2 py-2 text-center font-mono text-[11px] text-inspect/70 dark:border-coal-line dark:text-inspect-soft/70">
-          已安装 · 未启动 · 可一键启动
+          已安装 · 未启动 · 设置启动目录后可一键启动
         </p>
 
         <!-- 操作 -->
