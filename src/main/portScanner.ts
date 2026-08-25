@@ -37,28 +37,47 @@ export interface ScanData {
 const PS_SCRIPT = `
 $ErrorActionPreference = 'SilentlyContinue'
 $ProgressPreference = 'SilentlyContinue'
-$conns = @(Get-NetTCPConnection -State Listen | ForEach-Object {
+
+# 并行执行三路采集，避免串行拖慢；每路内部容错，任何单点失败都不阻塞整体
+# 注：Job 是独立会话，需在其内部也抑制进度输出，避免 CLIXML 污染主进程 stdout
+$jobConns = Start-Job { $ProgressPreference='SilentlyContinue'; Get-NetTCPConnection -State Listen | Select-Object -Property LocalAddress,LocalPort,OwningProcess }
+$jobProcs = Start-Job { $ProgressPreference='SilentlyContinue'; Get-CimInstance Win32_Process | Select-Object -Property ProcessId,ParentProcessId,Name,CommandLine,CreationDate }
+$jobPerf  = Start-Job { $ProgressPreference='SilentlyContinue'; Get-Process -ErrorAction SilentlyContinue | Select-Object -Property Id,CPU,WorkingSet64,Path }
+$jobOs    = Start-Job { $ProgressPreference='SilentlyContinue'; Get-CimInstance Win32_OperatingSystem | Select-Object -Property TotalVisibleMemorySize,FreePhysicalMemory }
+$jobCpu   = Start-Job { $ProgressPreference='SilentlyContinue'; Get-CimInstance Win32_PerfFormattedData_PerfOS_Processor -Filter "Name='_Total'" | Select-Object -Property PercentProcessorTime }
+
+# 等待全部完成（上限 12s），超时的 Job 强制回收，避免扫描挂死
+$timeout = 12
+$deadline = (Get-Date).AddSeconds($timeout)
+while (@($jobConns,$jobProcs,$jobPerf,$jobOs,$jobCpu | Where-Object { $_.State -in 'NotStarted','Running' }).Count -gt 0 -and (Get-Date) -lt $deadline) {
+  Start-Sleep -Milliseconds 200
+}
+$jobConns,$jobProcs,$jobPerf,$jobOs,$jobCpu | ForEach-Object {
+  if ($_.State -ne 'Completed') { Stop-Job $_ -ErrorAction SilentlyContinue }
+}
+
+$conns = @(Receive-Job $jobConns | ForEach-Object {
   [ordered]@{ addr = [string]$_.LocalAddress; port = [int]$_.LocalPort; pid = [int]$_.OwningProcess }
 })
-$procs = @(Get-CimInstance Win32_Process | ForEach-Object {
+$procs = @(Receive-Job $jobProcs | ForEach-Object {
   $c = $null
   try { $c = [DateTimeOffset]$_.CreationDate } catch { $c = $null }
   [ordered]@{ pid = [int]$_.ProcessId; ppid = [int]$_.ParentProcessId; name = [string]$_.Name; cmd = $_.CommandLine; created = $c }
 })
-$perf = @(Get-Process | ForEach-Object {
+$perf = @(Receive-Job $jobPerf | ForEach-Object {
   [ordered]@{ pid = [int]$_.Id; cpu = [double]$_.CPU; mem = [long]$_.WorkingSet64; path = $_.Path }
 })
-$os = $null
-try { $os = Get-CimInstance Win32_OperatingSystem } catch { $os = $null }
+$os = Receive-Job $jobOs | Select-Object -First 1
 $osInfo = $null
 if ($os) {
   $osInfo = [ordered]@{ totalMemKB = [double]$os.TotalVisibleMemorySize; freeMemKB = [double]$os.FreePhysicalMemory }
 }
+$cpuRow = Receive-Job $jobCpu | Select-Object -First 1
 $cpuPct = $null
-try {
-  $cpuPerf = Get-CimInstance Win32_PerfFormattedData_PerfOS_Processor -Filter "Name='_Total'"
-  $cpuPct = [double]$cpuPerf.PercentProcessorTime
-} catch { $cpuPct = $null }
+if ($cpuRow) { try { $cpuPct = [double]$cpuRow.PercentProcessorTime } catch { $cpuPct = $null } }
+
+$jobConns,$jobProcs,$jobPerf,$jobOs,$jobCpu | Remove-Job -Force -ErrorAction SilentlyContinue
+
 [ordered]@{ ts = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds(); conns = $conns; procs = $procs; perf = $perf; os = $osInfo; cpuPct = $cpuPct } | ConvertTo-Json -Depth 5 -Compress
 `
 
@@ -70,7 +89,7 @@ export async function scanPorts(): Promise<ScanData> {
   const { stdout } = await execFileAsync(
     'powershell.exe',
     ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', encoded],
-    { windowsHide: true, maxBuffer: 64 * 1024 * 1024, timeout: 20000 }
+    { windowsHide: true, maxBuffer: 64 * 1024 * 1024, timeout: 35000 }
   )
   return parseScan(stdout)
 }

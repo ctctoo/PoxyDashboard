@@ -1,3 +1,12 @@
+// 抑制 node:sqlite 的实验性功能警告（已在实际使用中验证稳定可用）
+process.removeAllListeners('warning')
+process.on('warning', (warning) => {
+  // 仅忽略 node:sqlite 的实验性警告，其余警告照常输出
+  if (warning.name === 'ExperimentalWarning' && /SQLite/.test(warning.message)) return
+  // eslint-disable-next-line no-console
+  console.warn(warning)
+})
+
 import { app, BrowserWindow, Menu, Tray, nativeImage, shell } from 'electron'
 import { readFileSync, writeFileSync } from 'fs'
 import { createServer } from 'http'
@@ -11,11 +20,15 @@ import { broadcast, registerIpc } from './ipc'
 import { LoggerService } from './logger'
 import { MonitorService } from './monitor'
 import { ProcessManager } from './processManager'
+import { Database } from './storage/database'
+import { createModules } from './modules'
+import { registerDesktopIpc } from './modules/ipc'
 
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
 let quitting = false
 let appLogger: LoggerService | null = null
+let appDatabase: Database | null = null
 
 const DEFAULT_STATUS_PORT = 16888
 function resolveStatusPort(): number {
@@ -275,6 +288,9 @@ if (!gotLock) {
     const cfg = new ConfigStore(logger)
     const pm = new ProcessManager(logger)
     const monitor = new MonitorService(cfg, pm)
+    const database = new Database(logger)
+    appDatabase = database
+    const mods = createModules(database, logger, pm)
 
     const httpServer = createServer((req, res) => {
       res.setHeader('Content-Type', 'application/json; charset=utf-8')
@@ -322,9 +338,16 @@ if (!gotLock) {
     httpServer.listen(statusPort, '127.0.0.1')
 
     registerIpc({ cfg, pm, logger, monitor, appInfo })
+    registerDesktopIpc(mods, monitor, logger)
     createWindow()
     createTray()
     monitor.start()
+    // 后台首次应用发现（worker 线程执行，不阻塞主进程）
+    setTimeout(() => {
+      void mods.applications
+        .syncDiscovered()
+        .catch((err) => logger.business(`应用发现失败：${(err as Error).message}`))
+    }, 1500)
     logger.append('dashboard', 'sys', `总控台已启动 v${app.getVersion()} (${process.platform})`)
 
     app.on('activate', () => {
@@ -341,5 +364,7 @@ if (!gotLock) {
     appLogger?.business('总控台退出')
     tray?.destroy()
     tray = null
+    appDatabase?.close()
+    appDatabase = null
   })
 }

@@ -13,7 +13,11 @@ import {
   MonitorCog,
   Keyboard,
   Zap,
-  Bot
+  Bot,
+  LayoutDashboard,
+  AppWindow,
+  FolderKanban,
+  Cpu
 } from '@lucide/vue'
 import { view, setView, openDashboardLogs } from './stores/view'
 import { initApps } from './stores/apps'
@@ -23,6 +27,10 @@ import { initLogs } from './stores/logs'
 import { initSettings, settings, cycleTheme } from './stores/settings'
 import { togglePalette } from './stores/palette'
 import { api } from './lib/api'
+import HomeView from './views/HomeView.vue'
+import ApplicationsView from './views/ApplicationsView.vue'
+import WorkspaceView from './views/WorkspaceView.vue'
+import ModelsView from './views/ModelsView.vue'
 import LaunchpadView from './views/LaunchpadView.vue'
 import MonitorView from './views/MonitorView.vue'
 import AgentView from './views/AgentView.vue'
@@ -36,18 +44,30 @@ import AppEditorModal from './components/app/AppEditorModal.vue'
 import DiagnosticsModal from './components/app/DiagnosticsModal.vue'
 import AppBootLoader from './components/AppBootLoader.vue'
 import { editorState, diagnosticsId } from './stores/ui'
+import { initApps2 } from './stores/apps2'
+import { initWorkspaces } from './stores/workspaces'
+import { initOverview } from './stores/overview'
+import { initModels } from './stores/models'
 
 const navItems = [
-  { key: 'launchpad', label: '启动台', icon: Rocket, code: '01' },
-  { key: 'monitor', label: '服务监控', icon: Activity, code: '02' },
-  { key: 'dbs', label: '数据库', icon: Database, code: '03' },
-  { key: 'docker', label: 'Docker', icon: Boxes, code: '04' },
-  { key: 'agents', label: 'AI Agent', icon: Bot, code: '05' },
-  { key: 'logs', label: '日志中心', icon: ScrollText, code: '06' },
-  { key: 'settings', label: '设置中心', icon: SettingsIcon, code: '07' }
+  { key: 'home', label: '总览', icon: LayoutDashboard, code: '00' },
+  { key: 'applications', label: '应用管理', icon: AppWindow, code: '01' },
+  { key: 'workspace', label: '工作区', icon: FolderKanban, code: '02' },
+  { key: 'models', label: '本地模型', icon: Cpu, code: '03' },
+  { key: 'launchpad', label: '启动台', icon: Rocket, code: '04' },
+  { key: 'monitor', label: '服务监控', icon: Activity, code: '05' },
+  { key: 'dbs', label: '数据库', icon: Database, code: '06' },
+  { key: 'docker', label: 'Docker', icon: Boxes, code: '07' },
+  { key: 'agents', label: 'AI Agent', icon: Bot, code: '08' },
+  { key: 'logs', label: '日志中心', icon: ScrollText, code: '09' },
+  { key: 'settings', label: '设置中心', icon: SettingsIcon, code: '10' }
 ] as const
 
 const titles: Record<string, { title: string; sub: string }> = {
+  home: { title: '总览', sub: 'HOME · 本机状态总览' },
+  applications: { title: '应用管理', sub: 'APPS · 本机应用统一入口' },
+  workspace: { title: '工作区', sub: 'WORKSPACE · 项目统一管理' },
+  models: { title: '本地模型', sub: 'LOCAL LLM · 本机大模型启动管理' },
   launchpad: { title: '启动台', sub: 'LAUNCHPAD · 服务与任务控制' },
   monitor: { title: '服务监控', sub: 'MONITOR · 本机运行观测' },
   dbs: { title: '数据库', sub: 'DATABASE · 本机数据库实例' },
@@ -59,6 +79,10 @@ const titles: Record<string, { title: string; sub: string }> = {
 
 const viewComp = computed(() => {
   const map = {
+    home: HomeView,
+    applications: ApplicationsView,
+    workspace: WorkspaceView,
+    models: ModelsView,
     launchpad: LaunchpadView,
     monitor: MonitorView,
     dbs: DbsView,
@@ -78,7 +102,16 @@ const themeIcon = computed(() => {
 
 /** 启动加载：数据源步骤状态，用于加载动画圆点 */
 type BootStep = 'pending' | 'loading' | 'done'
-const bootSteps = ref<BootStep[]>(['pending', 'pending', 'pending', 'pending'])
+const bootSteps = ref<BootStep[]>([
+  'pending',
+  'pending',
+  'pending',
+  'pending',
+  'pending',
+  'pending',
+  'pending',
+  'pending'
+])
 
 /** 是否完成启动（加载动画结束） */
 const booted = ref(false)
@@ -102,6 +135,10 @@ onMounted(() => {
   runStep(1, initApps()) // 启动台应用
   runStep(2, initMonitor()) // 进程 / 端口监控
   runStep(3, initAgents()) // AI Agent
+  runStep(4, initOverview()) // Home 总览 + 应用/工作区索引
+  runStep(5, initApps2()) // 应用管理
+  runStep(6, initWorkspaces()) // 工作区
+  runStep(7, initModels()) // 本地模型
   initLogs() // 日志订阅（同步，不计入加载步骤）
 
   api.on('shortcut', (kind) => {

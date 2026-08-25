@@ -6,6 +6,8 @@ import { openDashboardLogs, setView, view } from './view'
 import { settings, setNotify, cycleTheme } from './settings'
 import { openAdd } from './ui'
 import { confirmDialog } from './confirm'
+import { apps, launch } from './apps2'
+import { workspaces, open as openWorkspace, start as startWorkspace } from './workspaces'
 
 export interface PaletteAction {
   id: string
@@ -58,6 +60,9 @@ function buildActions(): PaletteAction[] {
   const acts: PaletteAction[] = [
     { id: 'add-service', label: '添加服务', hint: '长期运行 · 端口语义', keywords: 'service 添加服务 新服务', icon: '🚀', run: () => openAdd('service') },
     { id: 'add-task', label: '添加任务', hint: '批处理 · 有结束时间', keywords: 'task 添加任务 新任务 脚本', icon: '📋', run: () => openAdd('task') },
+    { id: 'view-home', label: '打开总览', hint: view.value === 'home' ? '当前' : undefined, keywords: '总览 home dashboard 系统状态', icon: '🏠', run: () => setView('home') },
+    { id: 'view-applications', label: '打开应用管理', hint: view.value === 'applications' ? '当前' : undefined, keywords: '应用 应用管理 applications apps', icon: '🗂️', run: () => setView('applications') },
+    { id: 'view-workspace', label: '打开工作区', hint: view.value === 'workspace' ? '当前' : undefined, keywords: '工作区 workspace 项目', icon: '📁', run: () => setView('workspace') },
     { id: 'view-launchpad', label: '打开启动台', hint: view.value === 'launchpad' ? '当前' : undefined, keywords: '启动台 launchpad 服务 任务', icon: '🚀', run: () => setView('launchpad') },
     { id: 'view-monitor', label: '打开服务监控', hint: view.value === 'monitor' ? '当前' : undefined, keywords: '监控 monitor 进程 端口', icon: '📡', run: () => setView('monitor') },
     { id: 'view-dbs', label: '打开数据库', hint: view.value === 'dbs' ? '当前' : undefined, keywords: '数据库 database db mysql redis', icon: '🗄️', run: () => setView('dbs') },
@@ -96,6 +101,40 @@ function buildActions(): PaletteAction[] {
         setView('logs')
       }
     })
+  }
+
+  // 本机应用（Module 2）：启动
+  for (const a of apps.value) {
+    acts.push({
+      id: `launch-app-${a.id}`,
+      label: `启动「${a.name}」`,
+      hint: '本机应用',
+      keywords: `${a.name} ${a.path} 应用`,
+      icon: '⚡',
+      run: () => launch(a.id)
+    })
+  }
+
+  // 工作区（Module 4）：打开 / 启动
+  for (const w of workspaces.value) {
+    acts.push({
+      id: `open-ws-${w.id}`,
+      label: `打开工作区「${w.name}」`,
+      hint: w.type ?? '工作区',
+      keywords: `${w.name} ${w.path} 工作区`,
+      icon: '📁',
+      run: () => openWorkspace(w.id)
+    })
+    if (w.startCommand) {
+      acts.push({
+        id: `start-ws-${w.id}`,
+        label: `启动工作区「${w.name}」`,
+        hint: w.startCommand,
+        keywords: `${w.name} 启动 运行 项目`,
+        icon: '▶️',
+        run: () => startWorkspace(w.id)
+      })
+    }
   }
 
   acts.push({

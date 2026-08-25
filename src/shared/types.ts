@@ -322,3 +322,152 @@ export interface AppInfo {
   node: string
   platform: string
 }
+
+/* ==================================================================== */
+/*  Phase 1：Desktop Assistant 统一入口模块                               */
+/* ==================================================================== */
+
+/** 本机应用（Application Manager / Module 2） */
+export interface DesktopApp {
+  id: string
+  name: string
+  path: string
+  icon?: string
+  category?: string
+  /** 来源：start-menu | registry | program-files | appdata | manual */
+  source?: string
+  pinned: boolean
+  lastUsed?: number
+  createdAt: number
+}
+
+/** 工作区（Workspace Manager / Module 4） */
+export interface Workspace {
+  id: string
+  name: string
+  path: string
+  /** 识别出的项目类型，如 node / java / python / go / rust / static / unknown */
+  type?: string
+  /** 技术栈标签（逗号分隔），如 node,pnpm,vite */
+  techStack?: string
+  /** 推荐启动命令 */
+  startCommand?: string
+  port?: number
+  pinned: boolean
+  lastOpened?: number
+  createdAt: number
+}
+
+/** 剪贴板条目（Clipboard Manager / Module 7，Phase 2 预留） */
+export interface ClipboardEntry {
+  id: number
+  content: string
+  type: 'text' | 'code' | 'url' | 'image'
+  pinned: boolean
+  createdTime: number
+}
+
+/** 事件日志（event_log 表） */
+export interface EventLogRow {
+  id: number
+  type: string
+  content?: string
+  time: number
+}
+
+/** 安全权限策略中的操作风险分级 */
+export type PermissionRisk = 'read' | 'safe' | 'dangerous'
+
+/** 需要用户确认的危险操作 */
+export interface DangerousAction {
+  action: string
+  target?: string
+  description?: string
+}
+
+/** Home Dashboard 系统状态总览（Module 1） */
+export interface SystemOverview {
+  cpu: { usage: number; cores: number; history: number[] }
+  memory: { usedMB: number; capacityMB: number; percent: number; history: number[] }
+  disk: { totalGB: number; freeGB: number; percent: number }
+  runningApps: number
+  services: number
+  containers: number
+  databases: number
+  agents: number
+  alerts: number
+  /** 已登记工作区数量 */
+  workspaces: number
+  /** 本地大模型实例数量 */
+  models: number
+  ts: number
+}
+
+/* ==================================================================== */
+/*  本地大模型（Local LLM / Module 8）                                    */
+/* ==================================================================== */
+
+/** 本地大模型运行框架 */
+export type ModelRuntime =
+  | 'ollama'
+  | 'llamacpp'
+  | 'vllm'
+  | 'lmstudio'
+  | 'koboldcpp'
+  | 'textgen'
+  | 'llamacpp-python'
+  | 'gpt4all'
+  | 'custom'
+
+/** 运行实例状态 */
+export type ModelStatus = 'stopped' | 'starting' | 'running' | 'stopping' | 'error'
+
+/** 本地大模型运行环境（自动检测结果） */
+export interface ModelEnv {
+  kind: ModelRuntime
+  label: string
+  icon: string
+  /** 可执行文件绝对路径（已解析） */
+  bin: string
+  /** 版本（尽力探测） */
+  version?: string
+  /** 框架默认端口 */
+  defaultPort: number
+  /** 是否可用（二进制存在） */
+  available: boolean
+  /** 探测到时的提示/说明 */
+  note?: string
+}
+
+/** 本地大模型实例配置 */
+export interface LocalModelConfig {
+  id: string
+  name: string
+  /** 运行框架 */
+  runtime: ModelRuntime
+  /** 模型文件或模型名（ollama 用模型名，其余为文件路径） */
+  model: string
+  /** 自定义框架的可执行文件路径 */
+  binPath?: string
+  /** 监听地址 */
+  host: string
+  /** 监听端口 */
+  port: number
+  /** 额外启动参数（换行分隔） */
+  extraArgs?: string
+  /** 工作目录 */
+  dir?: string
+  /** 启动命令预览（不可编辑，展示用） */
+  command?: string
+  pinned?: boolean
+  createdAt: number
+}
+
+/** 本地大模型实例 + 运行状态 */
+export interface LocalModel extends LocalModelConfig {
+  status: ModelStatus
+  pid?: number
+  startedAt?: number
+  exitCode?: number
+  error?: string
+}

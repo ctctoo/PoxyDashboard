@@ -23,6 +23,7 @@ const api: Api = {
 
   pickDirectory: () => ipcRenderer.invoke('dialog:pickDirectory'),
   pickScript: () => ipcRenderer.invoke('dialog:pickScript'),
+  pickExecutable: () => ipcRenderer.invoke('dialog:pickExecutable'),
   detectProject: (dir) => ipcRenderer.invoke('project:detect', dir),
   scriptCommand: (path) => ipcRenderer.invoke('project:scriptCommand', path),
 
@@ -50,6 +51,38 @@ const api: Api = {
   openUrl: (url) => ipcRenderer.invoke('shell:openUrl', url),
   openPath: (p) => ipcRenderer.invoke('shell:openPath', p),
   getAppInfo: () => ipcRenderer.invoke('app:info'),
+
+  listApplications: () => ipcRenderer.invoke('apps2:list'),
+  searchApplications: (q) => ipcRenderer.invoke('apps2:search', q),
+  syncDiscoveredApps: () => ipcRenderer.invoke('apps2:sync'),
+  addApplication: (name, path, category) => ipcRenderer.invoke('apps2:add', name, path, category),
+  setAppPinnedDesktop: (id, v) => ipcRenderer.invoke('apps2:setPinned', id, v),
+  setAppCategory: (id, category) => ipcRenderer.invoke('apps2:setCategory', id, category),
+  removeApplication: (id) => ipcRenderer.invoke('apps2:remove', id),
+  launchApplication: (id) => ipcRenderer.invoke('apps2:launch', id),
+  recentApplications: () => ipcRenderer.invoke('apps2:recent'),
+
+  listWorkspaces: () => ipcRenderer.invoke('ws:list'),
+  searchWorkspaces: (q) => ipcRenderer.invoke('ws:search', q),
+  addWorkspace: (path) => ipcRenderer.invoke('ws:add', path),
+  setWorkspacePinned: (id, v) => ipcRenderer.invoke('ws:setPinned', id, v),
+  removeWorkspace: (id) => ipcRenderer.invoke('ws:remove', id),
+  openWorkspace: (id) => ipcRenderer.invoke('ws:open', id),
+  startWorkspace: (id) => ipcRenderer.invoke('ws:start', id),
+  recentWorkspaces: () => ipcRenderer.invoke('ws:recent'),
+
+  getSystemOverview: () => ipcRenderer.invoke('overview:get'),
+  describeDangerous: (action, target) => ipcRenderer.invoke('permission:describe', action, target),
+
+  detectModelEnvs: () => ipcRenderer.invoke('models:detect'),
+  pickModelFile: () => ipcRenderer.invoke('models:pickFile'),
+  listModels: () => ipcRenderer.invoke('models:list'),
+  addModel: (input) => ipcRenderer.invoke('models:add', input),
+  updateModel: (id, patch) => ipcRenderer.invoke('models:update', id, patch),
+  removeModel: (id) => ipcRenderer.invoke('models:remove', id),
+  startModel: (id) => ipcRenderer.invoke('models:start', id),
+  stopModel: (id) => ipcRenderer.invoke('models:stop', id),
+  buildModelCommand: (input) => ipcRenderer.invoke('models:command', input),
 
   on: (channel, cb) => {
     const listener = (_e: IpcRendererEvent, payload: unknown): void =>

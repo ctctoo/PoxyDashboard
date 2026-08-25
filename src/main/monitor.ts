@@ -94,6 +94,11 @@ export class MonitorService extends EventEmitter {
     return this.lastSnapshot
   }
 
+  /** 当前待处理（未忽略）的新端口提醒数 */
+  getPendingAlertCount(): number {
+    return this.lastAlerts.length
+  }
+
   private ack(port: number): void {
     this.dismissedPorts.add(port)
     this.knownPorts.add(port)
