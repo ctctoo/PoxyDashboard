@@ -88,8 +88,13 @@ npm run dev          # 开发模式（HMR）
 npm run typecheck    # 主进程 + 渲染进程类型检查
 npm test             # 单元测试（vitest）
 npm run build        # 类型检查 + 构建到 out/
+npm run build:unpack # 构建并生成免安装目录（--dir，不解包安装包）
 npm run build:win    # 打包 Windows 安装包（NSIS）
+npm run build:mac    # 打包 macOS 安装包（dmg）
+npm run build:linux  # 打包 Linux 安装包（AppImage / deb）
 ```
+
+> 构建脚本默认走 npmmirror 的 electron-builder 二进制镜像；如需要官方源，去掉命令中的 `cross-env ELECTRON_BUILDER_BINARIES_MIRROR=...` 前缀即可。
 
 > 如果 npm 的 install-scripts 策略拦截了 Electron 二进制下载：
 > `node node_modules/electron/install.js`，并确认 `node_modules/electron/path.txt` 内容为 `electron.exe`（无换行）。
@@ -112,21 +117,44 @@ npm run build:win    # 打包 Windows 安装包（NSIS）
 
 ```
 src/
-├── main/            # Electron 主进程：进程管理、端口扫描、监控、日志、IPC
-│   ├── index.ts     # 窗口 / 托盘 / 快捷键 / 本地只读 HTTP 服务
-│   ├── processManager.ts  # 启停、进程树安全停止、退出码语义
-│   ├── monitor.ts   # 端口扫描调度、新端口提醒、运行中 agent 聚合
-│   ├── agentAggregator.ts # AI agent 进程树聚合（应用本体 + 派生任务 + 活动识别 + 健康度）
-│   ├── portScanner.ts     # PowerShell 采集监听端口与进程信息、溯源分类
-│   ├── projectDetect.ts   # 项目类型识别 / 脚本命令生成（Node/Hexo/Go/Rust/Deno/.NET 等）
-│   ├── logger.ts    # 环形缓冲 + 滚动日志文件
-│   └── config.ts    # JSON 配置存储（原子写入）
-├── preload/         # contextBridge 类型化 API
-├── renderer/        # Vue 3 界面：启动台 / 监控 / 数据库 / Docker / AI Agent / 日志 / 设置 / 命令面板
+├── main/                      # Electron 主进程
+│   ├── index.ts               # 窗口 / 托盘 / 快捷键 / 本地只读 HTTP 服务
+│   ├── ipc.ts                 # 主进程 IPC 路由总入口
+│   ├── commands.ts            # 命令面板命令注册与执行
+│   ├── config.ts              # JSON 配置存储（原子写入）
+│   ├── logger.ts              # 环形缓冲 + 滚动日志文件
+│   ├── notify.ts              # 系统通知
+│   ├── validate.ts            # 服务 / 任务配置校验（失效检测）
+│   ├── processManager.ts      # 启停、进程树安全停止、退出码语义
+│   ├── monitor.ts             # 端口扫描调度、新端口提醒、运行中 agent 聚合
+│   ├── portScanner.ts         # PowerShell 采集监听端口与进程信息、溯源分类
+│   ├── projectDetect.ts       # 项目类型识别 / 脚本命令生成（Node/Hexo/Go/Rust/Deno/.NET 等）
+│   ├── dbDetect.ts            # 本机数据库实例发现（MySQL/Redis/PostgreSQL 等）
+│   ├── dockerScan.ts          # 本机 Docker 容器枚举
+│   ├── agentAggregator.ts     # AI agent 进程树聚合（应用本体 + 派生任务 + 活动识别 + 健康度）
+│   ├── agentDetect.ts         # agent 检测知识模块（只读展示，控制逻辑未调用）
+│   ├── agentLauncher.ts       # agent 启动命令知识模块（只读展示，控制逻辑未调用）
+│   ├── core/                  # 运行时核心
+│   │   ├── runtimeEngine.ts   # 运行时引擎（调度 / 状态机）
+│   │   ├── eventBus.ts        # 进程内事件总线
+│   │   └── permission.ts      # 权限 / 安全校验
+│   ├── modules/               # 业务模块
+│   │   ├── application/       # 应用（启动台 service/task）发现与生命周期
+│   │   │   ├── discover.ts / discoverWorker.ts / service.ts
+│   │   ├── models/            # 数据模型与进程 / 命令 / 检测抽象
+│   │   │   ├── command.ts / detect.ts / process.ts / service.ts
+│   │   ├── workspace/         # 工作区服务
+│   │   │   └── service.ts
+│   │   ├── index.ts / ipc.ts
+│   └── storage/               # 持久化
+│       └── database.ts        # 本地数据存储
+├── preload/                   # contextBridge 类型化 API（index.ts + 类型声明）
+├── renderer/                  # Vue 3 界面：启动台 / 监控 / 数据库 / Docker / AI Agent / 日志 / 设置 / 命令面板
 │   └── components/
-│       ├── ViewLoading.vue   # 各视图数据未就绪时的骨架屏加载动画
-│       └── AgentCard.vue     # 运行中 AI agent 卡片
-└── shared/          # 主进程与渲染进程共享的类型定义
+│       ├── ViewLoading.vue    # 各视图数据未就绪时的骨架屏加载动画
+│       └── AgentCard.vue      # 运行中 AI agent 卡片
+└── shared/                    # 主进程与渲染进程共享的类型定义与 API 契约
+    ├── types.ts / api.ts
 ```
 
 > 说明：`agentLauncher.ts` / `agentDetect.ts` 作为独立的启动命令 / 检测知识模块保留，当前 AI Agent 业务为只读展示，已不调用其控制逻辑。
